@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 2.2 seconds
-Output:
 "use strict";
 
 const app = document.getElementById("app");
