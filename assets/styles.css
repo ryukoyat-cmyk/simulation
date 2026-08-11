@@ -1576,3 +1576,43 @@ textarea:focus-visible {
   }
 }
 
+/* Parent persona selector: five cards must remain visible in one horizontal row. */
+.image-choice-grid.parent-choice-grid {
+  width: min(1180px, 100%);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(7px, 1vw, 13px);
+}
+
+.parent-choice-grid .image-choice.parent-choice {
+  padding: 8px 8px 12px;
+  border-radius: 18px;
+}
+
+.parent-choice-grid .parent-choice .choice-image {
+  height: clamp(92px, 13vw, 158px);
+  border-radius: 13px;
+}
+
+.parent-choice-grid .parent-choice strong {
+  margin-top: 8px;
+  font-size: clamp(.84rem, 1.35vw, 1.08rem);
+}
+
+.parent-choice-grid .parent-choice p {
+  min-height: 4.2em;
+  margin: 5px 1px 0;
+  font-size: clamp(.6rem, .86vw, .76rem);
+  line-height: 1.4;
+}
+
+@media (max-width: 720px) {
+  .image-choice-grid.parent-choice-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .parent-choice-grid .image-choice.parent-choice { padding: 5px 4px 8px; border-radius: 12px; }
+  .parent-choice-grid .parent-choice .choice-image { height: clamp(66px, 18vw, 102px); border-radius: 9px; }
+  .parent-choice-grid .parent-choice strong { font-size: .7rem; }
+  .parent-choice-grid .parent-choice p { min-height: 0; font-size: .5rem; line-height: 1.3; }
+}
+
