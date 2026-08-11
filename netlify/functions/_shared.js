@@ -54,7 +54,9 @@ export async function createOpenAIResponse({ system, input, maxOutputTokens = 60
     throw new Error(data.error?.message || `OpenAI request failed with ${res.status}`);
   }
 
-  return data.choices?.[0]?.message?.content?.trim() || "";
+  const content = data.choices?.[0]?.message?.content?.trim() || "";
+  if (!content) throw new Error("OpenAI returned an empty response.");
+  return content;
 }
 
 export async function createWithFallback(options, fallbackModel) {
