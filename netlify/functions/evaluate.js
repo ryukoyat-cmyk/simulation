@@ -45,13 +45,13 @@ export default async (req) => {
   ].filter(Boolean).join("\n");
 
   try {
-    const firstRaw = await createWithFallback({ model: process.env.OPENAI_PRIMARY_EVAL_MODEL || "gpt-5.6-luna", reasoningEffort: "none", system: rubricPrompt, input: context, maxOutputTokens: 2400, responseFormat: rubricSchema }, "gpt-5.4-mini");
+    const firstRaw = await createWithFallback({ model: process.env.OPENAI_PRIMARY_EVAL_MODEL || "gpt-5-mini", reasoningEffort: "none", system: rubricPrompt, input: context, maxOutputTokens: 2400, responseFormat: rubricSchema }, "gpt-4.1-mini");
     const first = normalize(JSON.parse(firstRaw));
     const secondRaw = await createWithFallback({
-      model: process.env.OPENAI_SECONDARY_EVAL_MODEL || "gpt-5.6-sol", reasoningEffort: "low", maxOutputTokens: 2600, responseFormat: rubricSchema,
+      model: process.env.OPENAI_SECONDARY_EVAL_MODEL || "gpt-5", reasoningEffort: "low", maxOutputTokens: 2600, responseFormat: rubricSchema,
       system: `${rubricPrompt}\n당신은 2차 검토자입니다. 1차 평가가 대화 근거와 일치하는지 검토하고, 점수·근거·누락만 필요한 범위에서 조정해 최종 평가를 작성하세요.`,
       input: `${context}\n\n1차 평가 초안:\n${JSON.stringify(first)}`
-    }, "gpt-5.4");
+    }, "gpt-4.1");
     const evaluation = calculate(normalize(JSON.parse(secondRaw)));
     if (body.sessionId) await saveToSupabase("simulation_evaluations", {
       session_id: body.sessionId, attempt_id: body.attemptId || body.sessionId, attempt_number: Number(body.attemptNumber || 1),

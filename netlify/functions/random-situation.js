@@ -63,7 +63,7 @@ export default async (req) => {
 
   try {
     const raw = await createOpenAIResponse({
-      model: process.env.OPENAI_SCENARIO_MODEL || "gpt-5.6-luna",
+      model: process.env.OPENAI_SCENARIO_MODEL || "gpt-5-mini",
       reasoningEffort: "none",
       system: [
         "당신은 초등교사의 학부모 민원 응대 시뮬레이션을 위한 연구용 민원 상황 생성자입니다.",

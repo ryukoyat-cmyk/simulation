@@ -26,7 +26,9 @@ export default async (req, context) => {
     type: "realtime",
     model: getEnv("OPENAI_REALTIME_MODEL") || "gpt-realtime-mini",
     instructions: String(body.instructions).slice(0, 12000),
-    output_modalities: ["audio", "text"],
+    // Realtime returns an audio transcript with audio output; the API does not
+    // allow requesting audio and text as separate output modalities together.
+    output_modalities: ["audio"],
     audio: {
       input: { transcription: { model: "gpt-4o-mini-transcribe", language: "ko" }, turn_detection: { type: "server_vad", create_response: false } },
       output: { voice }

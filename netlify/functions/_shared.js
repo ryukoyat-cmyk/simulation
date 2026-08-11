@@ -18,7 +18,7 @@ export async function createOpenAIResponse({ system, input, maxOutputTokens = 70
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
 
   const body = {
-    model: model || getEnv("OPENAI_MODEL") || "gpt-5.6-luna",
+    model: model || getEnv("OPENAI_MODEL") || "gpt-5-mini",
     messages: [{ role: "system", content: system }, ...normalizeMessages(input)],
     max_tokens: maxOutputTokens,
     reasoning_effort: reasoningEffort

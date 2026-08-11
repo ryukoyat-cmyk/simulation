@@ -9,14 +9,14 @@ export default async (req) => {
   if (!body?.teacherText || !Array.isArray(body?.messages)) return json({ error: "teacherText and messages are required" }, 400);
   try {
     const raw = await createWithFallback({
-      model: process.env.OPENAI_TURN_FEEDBACK_MODEL || "gpt-5.6-luna",
-      fallbackModel: "gpt-5.4-mini",
+      model: process.env.OPENAI_TURN_FEEDBACK_MODEL || "gpt-5-mini",
+      fallbackModel: "gpt-4.1-mini",
       reasoningEffort: "none",
       maxOutputTokens: 260,
       responseFormat: schema,
       system: "당신은 학부모 민원 대응 연습의 즉시 피드백 도우미입니다. 점수나 등급을 말하지 마세요. 방금 교사 발화에서 드러난 수행 요소(met)와 다음 발화에서 보완할 요소(next)를 각각 최대 2개 선택하고, 2문장 이내의 짧고 구체적인 메시지를 한국어로 작성하세요.",
       input: body.messages.map((m) => `${m.role === "teacher" ? "교사" : "학부모"}: ${m.content}`).join("\n")
-    }, "gpt-5.4-mini");
+    }, "gpt-4.1-mini");
     return json(JSON.parse(raw));
   } catch (error) {
     return json({ met: [], next: ["사실 확인"], message: "상대의 감정을 인정한 뒤, 구체적인 사실을 한 가지 더 확인해 보세요." });
