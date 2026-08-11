@@ -837,12 +837,12 @@ button:disabled {
 .privacy-lines { display: grid; gap: 12px; margin-top: 20px; }
 .privacy-lines p { margin: 0; color: #435168; line-height: 1.65; }
 
-.parent-choice-grid { width: min(1360px, 100%); grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
-.parent-choice { padding: 12px 12px 18px; border-radius: 22px; }
-.parent-choice .choice-image { height: 220px; border-radius: 15px; }
+.parent-choice-grid { width: min(1440px, 100%); grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(8px, 1vw, 14px); }
+.parent-choice { padding: 10px 10px 14px; border-radius: 20px; }
+.parent-choice .choice-image { height: clamp(118px, 17vw, 210px); border-radius: 14px; }
 .parent-choice .choice-image img { object-fit: contain; object-position: center; }
-.parent-choice strong { margin-top: 12px; font-size: 1.2rem; }
-.parent-choice p { min-height: 5.2em; margin: 8px 4px 0; color: #68758a; font-size: .86rem; }
+.parent-choice strong { margin-top: 10px; font-size: clamp(.98rem, 1.5vw, 1.2rem); }
+.parent-choice p { min-height: 5.2em; margin: 7px 2px 0; color: #68758a; font-size: clamp(.69rem, 1.05vw, .86rem); line-height: 1.45; }
 .school-choice-grid .image-choice p { display: none; }
 
 .sim-layout { align-items: stretch; }
@@ -864,13 +864,12 @@ button:disabled {
 .scenario-copy span { color: #167e75; font-size: .78rem; font-weight: 800; }
 .scenario-copy p { margin: 6px 0 0; color: #405968; line-height: 1.6; }
 
-@media (max-width: 1100px) {
-  .parent-choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 @media (max-width: 720px) {
-  .parent-choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .parent-choice-grid .parent-choice:last-child { grid-column: span 2; }
-  .parent-choice .choice-image { height: 190px; }
+  .parent-choice-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .parent-choice { padding: 6px 5px 9px; border-radius: 14px; }
+  .parent-choice .choice-image { height: clamp(82px, 20vw, 130px); }
+  .parent-choice strong { margin-top: 7px; font-size: .78rem; }
+  .parent-choice p { min-height: 0; margin-top: 5px; font-size: .58rem; line-height: 1.35; }
   .input-strip { grid-template-columns: 1fr; }
   .input-actions { grid-template-columns: 1fr 1fr; }
   .chat-history { height: 52vh; }
@@ -985,7 +984,7 @@ button:disabled {
 .evaluation-error { margin:18px 0 0; padding:14px 16px; border-radius:14px; color:#9f3e3e; background:#fff1f0; line-height:1.6; }
 
 @media (max-width: 720px) {
-  .image-choice-grid, .school-choice-grid, .domain-grid, .feedback-columns { grid-template-columns:1fr; }
+  .image-choice-grid:not(.parent-choice-grid), .school-choice-grid, .domain-grid, .feedback-columns { grid-template-columns:1fr; }
   .choice-image, .school-choice-grid .choice-image { height:260px; }
   .result-hero, .result-section { padding:26px 20px; border-radius:21px; }
   .result-score strong { font-size:3.8rem; }
