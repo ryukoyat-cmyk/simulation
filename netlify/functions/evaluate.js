@@ -1,125 +1,64 @@
-import { createOpenAIResponse, json, readJson, saveToSupabase } from "./_shared.js";
+import { createWithFallback, json, readJson, saveToSupabase } from "./_shared.js";
 
-const domainNames = [
-  "공감적 의사소통",
-  "사실 확인",
-  "교육적 설명",
-  "갈등 완화",
-  "절차 준수",
-  "교육활동 보호",
-  "절차적 판단"
+const criteria = [
+  ["요구 파악", "Ⅰ. 의사소통"], ["사실 확인", "Ⅰ. 의사소통"], ["공감적 표현", "Ⅰ. 의사소통"], ["명료한 설명", "Ⅰ. 의사소통"],
+  ["감정적 상황 대응", "Ⅱ. 갈등 완화"], ["비대립적 의사소통", "Ⅱ. 갈등 완화"], ["쟁점 조정", "Ⅱ. 갈등 완화"], ["갈등 확대 방지", "Ⅱ. 갈등 완화"],
+  ["사안 판단", "Ⅲ. 절차적 대응"], ["대응 범위 설정", "Ⅲ. 절차적 대응"], ["후속 절차 안내", "Ⅲ. 절차적 대응"], ["경계 설정", "Ⅲ. 절차적 대응"], ["이관·보고 판단", "Ⅲ. 절차적 대응"], ["대응 중단 판단", "Ⅲ. 절차적 대응"]
 ];
-
-const evaluationSchema = {
+const names = criteria.map(([name]) => name);
+const rubricSchema = {
   type: "json_schema",
   json_schema: {
-    name: "teacher_response_evaluation",
-    strict: true,
+    name: "complaint_response_evaluation", strict: true,
     schema: {
-      type: "object",
-      additionalProperties: false,
+      type: "object", additionalProperties: false,
       properties: {
-        score: { type: "integer", minimum: 0, maximum: 100 },
-        summary: { type: "string" },
-        criteria: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              name: { type: "string", enum: domainNames },
-              rating: { type: "string", enum: ["우수", "보통", "미흡"] },
-              comment: { type: "string" }
-            },
-            required: ["name", "rating", "comment"]
-          }
-        },
-        strengths: {
-          type: "array",
-          items: { type: "string" }
-        },
-        improvements: {
-          type: "array",
-          items: { type: "string" }
-        },
-        overallFeedback: { type: "string" }
-      },
-      required: ["score", "summary", "criteria", "strengths", "improvements", "overallFeedback"]
+        criteria: { type: "array", items: { type: "object", additionalProperties: false, properties: {
+          name: { type: "string", enum: names }, status: { type: "string", enum: ["scored", "not_applicable"] }, score: { type: "integer", minimum: 0, maximum: 4 }, evidence: { type: "string" }, comment: { type: "string" }
+        }, required: ["name", "status", "score", "evidence", "comment"] } },
+        strengths: { type: "array", items: { type: "string" } }, improvements: { type: "array", items: { type: "string" } }, alternatives: { type: "array", items: { type: "string" } }, summary: { type: "string" }
+      }, required: ["criteria", "strengths", "improvements", "alternatives", "summary"]
     }
   }
 };
 
+const rubricPrompt = `당신은 예비교원의 학부모 민원 대응 연습을 평가하는 교육 컨설턴트입니다. 반드시 JSON 스키마만 반환합니다.
+14개 요소 각각을 평가하세요. 실제 대화에서 판단할 근거가 전혀 필요 없는 요소만 status=not_applicable, score=0으로 하세요. 그렇지 않으면 status=scored와 1~4점을 사용하세요.
+4점은 수행이 구체적이고 적절함, 3점은 대체로 적절하나 일부 불명확함, 2점은 부분 인식이나 불충분함, 1점은 수행하지 않거나 부적절함입니다.
+evidence에는 실제 발화 또는 대화 사실을 짧게 연결하고, comment는 개선 방향을 씁니다. 강점·개선점은 각각 최대 3개, alternatives에는 실제로 사용할 수 있는 대안 발화를 2~3개 작성하세요.`;
+
 export default async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-
   const body = await readJson(req);
-  if (!Array.isArray(body?.messages) || !body.parentType || !body.situation) {
-    return json({ error: "messages, parentType, and situation are required" }, 400);
-  }
-
+  if (!Array.isArray(body?.messages) || !body.parentType || !body.situation) return json({ error: "messages, parentType, and situation are required" }, 400);
   const teacherTurns = body.messages.filter((m) => m.role === "teacher").length;
-  if (teacherTurns < 4) {
-    return json({ error: "교사 응답이 4회 이상이어야 평가할 수 있습니다." }, 400);
-  }
+  if (teacherTurns < 4) return json({ error: "교사 응답이 4회 이상이어야 평가할 수 있습니다." }, 400);
+
+  const conversation = body.messages.map((m) => `${m.role === "teacher" ? "교사" : "학부모"}: ${m.content}`).join("\n\n");
+  const context = [
+    `교원 유형: ${body.teacherType || "예비교원"}`,
+    `학교급: ${body.schoolLevel || "초등학교"}`,
+    `학부모 유형: ${body.parentType}`,
+    `민원 상황: ${body.situation}`,
+    body.situationContext ? `상세 맥락: ${body.situationContext}` : "",
+    "", `대화 기록:\n${conversation}`
+  ].filter(Boolean).join("\n");
 
   try {
-    const convo = body.messages
-      .map((m) => `${m.role === "parent" ? `학부모(${body.parentType})` : "교사"}: ${m.content}`)
-      .join("\n\n");
-
-    const raw = await createOpenAIResponse({
-      system: `
-당신은 초등교사의 학부모 민원 대응 역량을 평가하는 교육 컨설턴트입니다. 반드시 지정된 JSON 스키마로만 응답합니다.
-
-[평가 원칙]
-- 점수는 교사 응답 횟수로 주지 않습니다. 전체 대화 맥락, 표현의 질, 사실 확인의 충분성, 절차 판단, 교육활동 보호의 균형을 기준으로 0~100점에서 탄력적으로 산정합니다.
-- 단순 인사, 짧은 공감 표현, 형식적 사과만 있는 답변은 높은 점수를 줄 수 없습니다. 예를 들어 "안녕하세요" 수준의 대응은 0~15점 범위로 평가합니다.
-- 80점 이상은 최소 5개 평가 영역에서 구체적 근거가 있고, 감정 인정과 사실 확인, 교육적 설명, 절차 안내, 경계 설정이 대화 맥락에 맞게 결합된 경우에만 부여합니다.
-- 60점 이상은 적어도 4개 평가 영역에서 의미 있는 대응이 확인되어야 합니다.
-- 압박형 상황에서도 교사가 즉흥적 약속, 과도한 사과, 비교육적 양보를 하면 교육활동 보호와 절차적 판단을 낮게 평가합니다.
-- 각 평가 영역은 반드시 우수, 보통, 미흡 중 하나로 진단하고, comment에는 실제 대화 내용과 연결된 구체적 근거를 씁니다.
-
-[평가 영역]
-1. 공감적 의사소통: 학부모의 감정을 인정하며 적극적으로 경청하였는가?
-2. 사실 확인: 추측을 배제하고 충분한 질문을 통해 객관적 사실을 확인하였는가?
-3. 교육적 설명: 교육과정 및 생활 지도라는 객관적 근거로 상황을 설명하였는가?
-4. 갈등 완화: 감정을 자극하는 표현을 자제하고 협력적인 해결 방안을 제안하여 갈등을 완화하였는가?
-5. 절차 준수: 학교의 공식적인 상담 및 민원 처리 절차를 안내하고 준수하였는가?
-6. 교육활동 보호: 교사의 권한을 벗어난 요구를 배제하며 교육활동 보호 원칙을 유지하였는가?
-7. 절차적 판단: 담임교사의 지속적인 대응 여부, 관리자 이관의 필요성, 교육활동 침해 가능성을 종합적으로 판단하였는가?
-`.trim(),
-      input: [
-        `학부모 유형: ${body.parentType}`,
-        `사용자 화면에 표시된 민원 상황 요약: ${body.situation}`,
-        body.situationContext ? `AI 내부 참고 상세 맥락: ${body.situationContext}` : "",
-        "",
-        `대화 기록:\n${convo}`
-      ].filter(Boolean).join("\n"),
-      maxOutputTokens: 1500,
-      responseFormat: evaluationSchema
+    const firstRaw = await createWithFallback({ model: process.env.OPENAI_PRIMARY_EVAL_MODEL || "gpt-5.6-luna", reasoningEffort: "none", system: rubricPrompt, input: context, maxOutputTokens: 2400, responseFormat: rubricSchema }, "gpt-5.4-mini");
+    const first = normalize(JSON.parse(firstRaw));
+    const secondRaw = await createWithFallback({
+      model: process.env.OPENAI_SECONDARY_EVAL_MODEL || "gpt-5.6-sol", reasoningEffort: "low", maxOutputTokens: 2600, responseFormat: rubricSchema,
+      system: `${rubricPrompt}\n당신은 2차 검토자입니다. 1차 평가가 대화 근거와 일치하는지 검토하고, 점수·근거·누락만 필요한 범위에서 조정해 최종 평가를 작성하세요.`,
+      input: `${context}\n\n1차 평가 초안:\n${JSON.stringify(first)}`
+    }, "gpt-5.4");
+    const evaluation = calculate(normalize(JSON.parse(secondRaw)));
+    if (body.sessionId) await saveToSupabase("simulation_evaluations", {
+      session_id: body.sessionId, attempt_id: body.attemptId || body.sessionId, attempt_number: Number(body.attemptNumber || 1),
+      teacher_type: body.teacherType || null, school_level: body.schoolLevel || null, parent_type: body.parentType, situation: body.situation,
+      score: Math.round(evaluation.totalScore), scaled_score: evaluation.totalScore, summary: evaluation.summary, strengths: evaluation.strengths, improvements: evaluation.improvements,
+      conversation: { messages: body.messages, criteria: evaluation.criteria, alternatives: evaluation.alternatives, primaryEvaluation: first, overallFeedback: evaluation.summary }
     });
-
-    const evaluation = JSON.parse(raw);
-    evaluation.criteria = normalizeCriteria(evaluation.criteria);
-
-    if (body.sessionId) {
-      await saveToSupabase("simulation_evaluations", {
-        session_id: body.sessionId,
-        parent_type: body.parentType,
-        situation: body.situation,
-        score: evaluation.score,
-        summary: evaluation.summary,
-        strengths: evaluation.strengths,
-        improvements: evaluation.improvements,
-        conversation: {
-          messages: body.messages,
-          situationContext: body.situationContext || null,
-          criteria: evaluation.criteria,
-          overallFeedback: evaluation.overallFeedback
-        }
-      });
-    }
-
     return json(evaluation);
   } catch (error) {
     console.error(error);
@@ -127,24 +66,26 @@ export default async (req) => {
   }
 };
 
-function normalizeCriteria(criteria) {
-  const byName = new Map();
-  if (Array.isArray(criteria)) {
-    for (const item of criteria) {
-      if (item && domainNames.includes(item.name)) byName.set(item.name, item);
-    }
-  }
-  return domainNames.map((name) => {
-    const item = byName.get(name);
-    return {
-      name,
-      rating: item?.rating || "미흡",
-      comment: item?.comment || "해당 영역에 대한 구체적 근거가 대화에서 충분히 확인되지 않았습니다."
-    };
-  });
+function normalize(value) {
+  const byName = new Map((value.criteria || []).filter((item) => names.includes(item?.name)).map((item) => [item.name, item]));
+  return {
+    criteria: criteria.map(([name, domain]) => {
+      const item = byName.get(name);
+      const applicable = item?.status !== "not_applicable";
+      return { name, domain, status: applicable ? "scored" : "not_applicable", score: applicable ? Math.max(1, Math.min(4, Number(item?.score || 1))) : 0, evidence: item?.evidence || "대화에서 직접적인 근거를 충분히 확인하지 못했습니다.", comment: item?.comment || "다음 발화에서 이 요소를 구체적으로 드러내 보세요." };
+    }),
+    strengths: Array.isArray(value.strengths) ? value.strengths.slice(0, 3) : [], improvements: Array.isArray(value.improvements) ? value.improvements.slice(0, 3) : [], alternatives: Array.isArray(value.alternatives) ? value.alternatives.slice(0, 3) : [], summary: String(value.summary || "대화의 근거를 바탕으로 민원 대응 방식을 점검해 보세요.")
+  };
 }
 
-export const config = {
-  path: "/api/evaluate",
-  method: ["POST"]
-};
+function calculate(evaluation) {
+  const scored = evaluation.criteria.filter((item) => item.status === "scored");
+  const average = scored.length ? scored.reduce((sum, item) => sum + item.score, 0) / scored.length : 0;
+  const domains = ["Ⅰ. 의사소통", "Ⅱ. 갈등 완화", "Ⅲ. 절차적 대응"].map((name) => {
+    const items = evaluation.criteria.filter((item) => item.domain === name && item.status === "scored");
+    return { name, average: items.length ? Number((items.reduce((sum, item) => sum + item.score, 0) / items.length).toFixed(2)) : null, count: items.length };
+  });
+  return { ...evaluation, totalScore: Number((average * 14).toFixed(2)), averageScore: Number(average.toFixed(2)), domains };
+}
+
+export const config = { path: "/api/evaluate", method: ["POST"] };

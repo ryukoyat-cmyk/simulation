@@ -56,15 +56,19 @@ export default async (req) => {
   const rawExcludeTopics = Array.isArray(body.recentTopics) ? body.recentTopics : body.excludeTopics;
   const excludeIds = new Set(Array.isArray(rawExcludeIds) ? rawExcludeIds.slice(0, 120) : []);
   const excludeTopics = new Set(Array.isArray(rawExcludeTopics) ? rawExcludeTopics.slice(0, 8) : []);
+  const schoolLevel = ["초등학교", "중학교", "고등학교"].includes(body.schoolLevel) ? body.schoolLevel : "초등학교";
   const selected = selectSourceCases(excludeIds, excludeTopics);
   const sourceTopic = selected[0]?.topic || "기타 민원";
   const angle = selectAngle(sourceTopic);
 
   try {
     const raw = await createOpenAIResponse({
+      model: process.env.OPENAI_SCENARIO_MODEL || "gpt-5.6-luna",
+      reasoningEffort: "none",
       system: [
         "당신은 초등교사의 학부모 민원 응대 시뮬레이션을 위한 연구용 민원 상황 생성자입니다.",
-        "STEP1의 학부모 또는 교사 페르소나는 절대 고려하지 마세요. 페르소나와 민원 상황은 별개의 개념입니다.",
+        "학부모 페르소나는 절대 고려하지 마세요. 페르소나와 민원 상황은 별개의 개념입니다.",
+        `선택 학교급은 ${schoolLevel}입니다. 원 사례의 핵심 쟁점은 유지하되 학생 생활, 보호자 표현, 학교 절차를 ${schoolLevel} 맥락에 맞게 재구성하세요.`,
         "아래 실제 사례 조각을 직접 인용하지 말고, 개인정보와 고유 식별 정보를 제거하여 새로운 연습 상황으로 재구성하세요.",
         "자녀 이름은 반드시 \"금쪽이\"로 고정하세요.",
         "난이도 표현은 쓰지 마세요.",
@@ -100,6 +104,7 @@ export default async (req) => {
       angle,
       sourceIds: sourceIdsFrom(parsed.sourceIds, selected),
       stats: complaintCaseStats,
+      schoolLevel,
       generatedBy: "openai-case-corpus"
     });
   } catch (error) {
@@ -112,6 +117,7 @@ export default async (req) => {
       angle,
       sourceIds: selected.map(item => item.id),
       stats: complaintCaseStats,
+      schoolLevel,
       generatedBy: "case-corpus-fallback"
     });
   }

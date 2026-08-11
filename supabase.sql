@@ -8,6 +8,15 @@ create table if not exists public.simulation_messages (
   created_at timestamptz not null default now()
 );
 
+-- Audio recordings are deliberately not stored; only transcript text and AI text are retained.
+alter table public.simulation_messages add column if not exists attempt_id uuid;
+alter table public.simulation_messages add column if not exists attempt_number integer not null default 1;
+alter table public.simulation_messages add column if not exists teacher_type text;
+alter table public.simulation_messages add column if not exists school_level text;
+alter table public.simulation_messages add column if not exists input_mode text;
+alter table public.simulation_messages drop constraint if exists simulation_messages_role_check;
+alter table public.simulation_messages add constraint simulation_messages_role_check check (role in ('user', 'assistant', 'teacher', 'parent'));
+
 create table if not exists public.simulation_evaluations (
   id bigserial primary key,
   session_id uuid not null,
@@ -21,6 +30,12 @@ create table if not exists public.simulation_evaluations (
   created_at timestamptz not null default now()
 );
 
+alter table public.simulation_evaluations add column if not exists attempt_id uuid;
+alter table public.simulation_evaluations add column if not exists attempt_number integer not null default 1;
+alter table public.simulation_evaluations add column if not exists teacher_type text;
+alter table public.simulation_evaluations add column if not exists school_level text;
+alter table public.simulation_evaluations add column if not exists scaled_score numeric(6,2);
+
 create table if not exists public.simulation_situations (
   id bigserial primary key,
   session_id uuid not null,
@@ -30,6 +45,15 @@ create table if not exists public.simulation_situations (
   privacy_acknowledged_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.simulation_situations add column if not exists attempt_id uuid;
+alter table public.simulation_situations add column if not exists attempt_number integer not null default 1;
+alter table public.simulation_situations add column if not exists teacher_type text;
+alter table public.simulation_situations add column if not exists school_level text;
+alter table public.simulation_situations add column if not exists situation_context text;
+
+create index if not exists simulation_messages_attempt_idx on public.simulation_messages (attempt_id, created_at);
+create index if not exists simulation_evaluations_attempt_idx on public.simulation_evaluations (attempt_id, attempt_number);
 
 alter table public.simulation_messages enable row level security;
 alter table public.simulation_evaluations enable row level security;
