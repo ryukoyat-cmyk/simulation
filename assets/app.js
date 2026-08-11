@@ -169,4 +169,16 @@ function renderResult() {
 function retry() { const previous = S.evaluation; S.sessionId = uuid(); S.attemptId = S.attemptId || uuid(); S.attemptNumber += 1; S.messages = []; S.feedback = null; S.evaluation = null; S.realtimeError = ""; S.loading = false; S.page = 6; S.previousEvaluation = previous; startSimulation(); }
 async function post(url, body) { const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "요청을 처리하지 못했습니다."); return data; }
 
+// Realtime response.create accepts output_modalities, not modalities.
+requestParentReply = async (initial = false) => {
+  if (S.realtimeError) return;
+  sendRealtime({
+    type: "response.create",
+    response: {
+      output_modalities: ["audio"],
+      instructions: initial ? "Begin the first parent complaint in Korean." : "Reply as the parent in Korean to the teacher's last message."
+    }
+  });
+};
+
 render();
