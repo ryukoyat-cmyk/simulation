@@ -1,91 +1,42 @@
 import { createWithFallback, json, readJson, saveToSupabase } from "./_shared.js";
 
 const criteria = [
-  ["요구 파악", "Ⅰ. 의사소통"], ["사실 확인", "Ⅰ. 의사소통"], ["공감적 표현", "Ⅰ. 의사소통"], ["명료한 설명", "Ⅰ. 의사소통"],
-  ["감정적 상황 대응", "Ⅱ. 갈등 완화"], ["비대립적 의사소통", "Ⅱ. 갈등 완화"], ["쟁점 조정", "Ⅱ. 갈등 완화"], ["갈등 확대 방지", "Ⅱ. 갈등 완화"],
-  ["사안 판단", "Ⅲ. 절차적 대응"], ["대응 범위 설정", "Ⅲ. 절차적 대응"], ["후속 절차 안내", "Ⅲ. 절차적 대응"], ["경계 설정", "Ⅲ. 절차적 대응"], ["이관·보고 판단", "Ⅲ. 절차적 대응"], ["대응 중단 판단", "Ⅲ. 절차적 대응"]
+  ["요구 파악", "학부모의 핵심 요구와 쟁점을 경청하고 확인한다."], ["사실 확인", "추측 전에 필요한 사실관계를 질문하고 확인한다."], ["공감적 표현", "감정을 인정하되 성급히 동의하지 않는다."], ["명료한 설명", "상황·판단·가능한 조치를 이해하기 쉽게 설명한다."],
+  ["감정적 상황 대응", "감정이 고조되어도 안정적인 태도를 유지한다."], ["비대립적 의사소통", "반박보다 문제 해결에 초점을 둔다."], ["쟁점 조정", "감정과 해결 사안을 구분해 해결 가능한 쟁점으로 전환한다."], ["갈등 확대 방지", "갈등을 자극하는 표현을 피하고 악화를 조절한다."],
+  ["사안 판단", "교사가 직접 대응할 수 있는 사안인지 판단한다."], ["대응 범위 설정", "무리한 약속 없이 대응 가능한 범위를 설명한다."], ["후속 절차 안내", "확인·보고·회신 등 이후 절차를 안내한다."], ["경계 설정", "부당 요구·폭언 등의 허용 범위를 분명히 설정한다."], ["이관·보고 판단", "관리자 또는 학교 민원대응체계 이관을 적절히 판단한다."], ["대응 중단 판단", "정상 응대가 불가능할 때 적절히 대응을 종료한다."]
 ];
 const names = criteria.map(([name]) => name);
-const rubricSchema = {
-  type: "json_schema",
-  json_schema: {
-    name: "complaint_response_evaluation", strict: true,
-    schema: {
-      type: "object", additionalProperties: false,
-      properties: {
-        criteria: { type: "array", items: { type: "object", additionalProperties: false, properties: {
-          name: { type: "string", enum: names }, status: { type: "string", enum: ["scored", "not_applicable"] }, score: { type: "integer", minimum: 0, maximum: 4 }, evidence: { type: "string" }, comment: { type: "string" }
-        }, required: ["name", "status", "score", "evidence", "comment"] } },
-        strengths: { type: "array", items: { type: "string" } }, improvements: { type: "array", items: { type: "string" } }, alternatives: { type: "array", items: { type: "string" } }, summary: { type: "string" }
-      }, required: ["criteria", "strengths", "improvements", "alternatives", "summary"]
-    }
+const responseFormat = {
+  type: "json_schema", json_schema: { name: "teacher_response_evaluation", strict: true,
+    schema: { type: "object", additionalProperties: false, properties: {
+      summary: { type: "string" }, overallFeedback: { type: "string" }, strengths: { type: "array", items: { type: "string" } }, improvements: { type: "array", items: { type: "string" } },
+      criteria: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string", enum: names }, score: { type: "integer", minimum: 1, maximum: 4 }, applicable: { type: "boolean" }, evidence: { type: "string" } }, required: ["name", "score", "applicable", "evidence"] } }
+    }, required: ["summary", "overallFeedback", "strengths", "improvements", "criteria"] }
   }
 };
-
-const rubricPrompt = `당신은 예비교원의 학부모 민원 대응 연습을 평가하는 교육 컨설턴트입니다. 반드시 JSON 스키마만 반환합니다.
-14개 요소 각각을 평가하세요. 실제 대화에서 판단할 근거가 전혀 필요 없는 요소만 status=not_applicable, score=0으로 하세요. 그렇지 않으면 status=scored와 1~4점을 사용하세요.
-4점은 수행이 구체적이고 적절함, 3점은 대체로 적절하나 일부 불명확함, 2점은 부분 인식이나 불충분함, 1점은 수행하지 않거나 부적절함입니다.
-evidence에는 실제 발화 또는 대화 사실을 짧게 연결하고, comment는 개선 방향을 씁니다. 강점·개선점은 각각 최대 3개, alternatives에는 실제로 사용할 수 있는 대안 발화를 2~3개 작성하세요.`;
 
 export default async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const body = await readJson(req);
   if (!Array.isArray(body?.messages) || !body.parentType || !body.situation) return json({ error: "messages, parentType, and situation are required" }, 400);
-  const teacherTurns = body.messages.filter((m) => m.role === "teacher").length;
-  if (teacherTurns < 4) return json({ error: "교사 응답이 4회 이상이어야 평가할 수 있습니다." }, 400);
-
-  const conversation = body.messages.map((m) => `${m.role === "teacher" ? "교사" : "학부모"}: ${m.content}`).join("\n\n");
-  const context = [
-    `교원 유형: ${body.teacherType || "예비교원"}`,
-    `학교급: ${body.schoolLevel || "초등학교"}`,
-    `학부모 유형: ${body.parentType}`,
-    `민원 상황: ${body.situation}`,
-    body.situationContext ? `상세 맥락: ${body.situationContext}` : "",
-    "", `대화 기록:\n${conversation}`
-  ].filter(Boolean).join("\n");
-
+  if (body.messages.filter((m) => m.role === "teacher").length < 4) return json({ error: "교사 발화가 4회 이상이어야 평가할 수 있습니다." }, 400);
   try {
-    const firstRaw = await createWithFallback({ model: process.env.OPENAI_PRIMARY_EVAL_MODEL || "gpt-5-mini", reasoningEffort: "none", system: rubricPrompt, input: context, maxOutputTokens: 2400, responseFormat: rubricSchema }, "gpt-4.1-mini");
-    const first = normalize(JSON.parse(firstRaw));
-    const secondRaw = await createWithFallback({
-      model: process.env.OPENAI_SECONDARY_EVAL_MODEL || "gpt-5", reasoningEffort: "low", maxOutputTokens: 2600, responseFormat: rubricSchema,
-      system: `${rubricPrompt}\n당신은 2차 검토자입니다. 1차 평가가 대화 근거와 일치하는지 검토하고, 점수·근거·누락만 필요한 범위에서 조정해 최종 평가를 작성하세요.`,
-      input: `${context}\n\n1차 평가 초안:\n${JSON.stringify(first)}`
-    }, "gpt-4.1");
-    const evaluation = calculate(normalize(JSON.parse(secondRaw)));
-    if (body.sessionId) await saveToSupabase("simulation_evaluations", {
-      session_id: body.sessionId, attempt_id: body.attemptId || body.sessionId, attempt_number: Number(body.attemptNumber || 1),
-      teacher_type: body.teacherType || null, school_level: body.schoolLevel || null, parent_type: body.parentType, situation: body.situation,
-      score: Math.round(evaluation.totalScore), scaled_score: evaluation.totalScore, summary: evaluation.summary, strengths: evaluation.strengths, improvements: evaluation.improvements,
-      conversation: { messages: body.messages, criteria: evaluation.criteria, alternatives: evaluation.alternatives, primaryEvaluation: first, overallFeedback: evaluation.summary }
-    });
+    const convo = body.messages.map((m) => `${m.role === "parent" ? "학부모" : "교사"}: ${m.content}`).join("\n");
+    const system = `당신은 예비·현직교원의 학부모 민원 대응 연습을 평가하는 교육 전문가입니다. 반드시 JSON 스키마만 반환합니다.\n\n[평가 원칙]\n- 아래 14개 요소 각각을 대화의 실제 교사 발화에 근거해 1~4점으로 평가합니다.\n- 상황상 관찰할 기회가 없거나 해당하지 않는 요소만 applicable:false로 처리합니다. 그 경우에도 score는 1~4 정수로 채우되 총점 계산에서 제외됩니다.\n- 해당 없음은 편의상 주지 마세요. 대화에서 기대 가능한 요소인데 드러나지 않았다면 applicable:true, 1점으로 평가하세요.\n- evidence는 해당 점수의 구체적 대화 근거 또는 미흡 사유를 한 문장으로 씁니다.\n- 점수: 4=일관되고 적절한 수행, 3=대체로 적절하나 일부 불명확, 2=부분 인식·수행, 1=수행되지 않음 또는 부적절.\n- 강점·개선점은 2~4개, 종합 의견은 학습 피드백으로 간결히 씁니다.\n\n[14개 요소]\n${criteria.map(([name, detail], i) => `${i + 1}. ${name}: ${detail}`).join("\n")}`;
+    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: ${body.schoolLevel || "미선택"}\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}\n대화 기록:\n${convo}`;
+    const firstRaw = await createWithFallback({ model: process.env.OPENAI_PRIMARY_EVAL_MODEL || "gpt-5-mini", reasoningEffort: "none", system, input: context, maxOutputTokens: 2400, responseFormat }, "gpt-4.1-mini");
+    const first = JSON.parse(firstRaw);
+    const reviewSystem = `${system}\n\n당신은 2차 검토자입니다. 아래 1차 평가의 점수·근거·누락이 실제 교사 발화와 일치하는지 검토하고, 필요한 항목만 조정하여 같은 JSON 스키마로 최종 평가를 작성하세요.`;
+    const secondRaw = await createWithFallback({ model: process.env.OPENAI_SECONDARY_EVAL_MODEL || "gpt-5", reasoningEffort: "low", system: reviewSystem, input: `${context}\n\n1차 평가 초안:\n${JSON.stringify(first)}`, maxOutputTokens: 2600, responseFormat }, "gpt-4.1");
+    const evaluation = JSON.parse(secondRaw);
+    evaluation.criteria = normalizeCriteria(evaluation.criteria);
+    const applicable = evaluation.criteria.filter((item) => item.applicable);
+    evaluation.score = applicable.length ? Math.round((applicable.reduce((sum, item) => sum + item.score, 0) / applicable.length) * 14 * 10) / 10 : 0;
+    evaluation.applicableCount = applicable.length;
+    if (body.sessionId) await saveToSupabase("simulation_evaluations", { session_id: body.sessionId, parent_type: body.parentType, situation: body.situation, score: evaluation.score, summary: evaluation.summary, strengths: evaluation.strengths, improvements: evaluation.improvements, conversation: { messages: body.messages, teacherType: body.teacherType, schoolLevel: body.schoolLevel, situationContext: body.situationContext || null, criteria: evaluation.criteria, overallFeedback: evaluation.overallFeedback } });
     return json(evaluation);
-  } catch (error) {
-    console.error(error);
-    return json({ error: error.message || "Evaluation failed" }, 500);
-  }
+  } catch (error) { console.error(error); return json({ error: error.message || "Evaluation failed" }, 500); }
 };
-
-function normalize(value) {
-  const byName = new Map((value.criteria || []).filter((item) => names.includes(item?.name)).map((item) => [item.name, item]));
-  return {
-    criteria: criteria.map(([name, domain]) => {
-      const item = byName.get(name);
-      const applicable = item?.status !== "not_applicable";
-      return { name, domain, status: applicable ? "scored" : "not_applicable", score: applicable ? Math.max(1, Math.min(4, Number(item?.score || 1))) : 0, evidence: item?.evidence || "대화에서 직접적인 근거를 충분히 확인하지 못했습니다.", comment: item?.comment || "다음 발화에서 이 요소를 구체적으로 드러내 보세요." };
-    }),
-    strengths: Array.isArray(value.strengths) ? value.strengths.slice(0, 3) : [], improvements: Array.isArray(value.improvements) ? value.improvements.slice(0, 3) : [], alternatives: Array.isArray(value.alternatives) ? value.alternatives.slice(0, 3) : [], summary: String(value.summary || "대화의 근거를 바탕으로 민원 대응 방식을 점검해 보세요.")
-  };
-}
-
-function calculate(evaluation) {
-  const scored = evaluation.criteria.filter((item) => item.status === "scored");
-  const average = scored.length ? scored.reduce((sum, item) => sum + item.score, 0) / scored.length : 0;
-  const domains = ["Ⅰ. 의사소통", "Ⅱ. 갈등 완화", "Ⅲ. 절차적 대응"].map((name) => {
-    const items = evaluation.criteria.filter((item) => item.domain === name && item.status === "scored");
-    return { name, average: items.length ? Number((items.reduce((sum, item) => sum + item.score, 0) / items.length).toFixed(2)) : null, count: items.length };
-  });
-  return { ...evaluation, totalScore: Number((average * 14).toFixed(2)), averageScore: Number(average.toFixed(2)), domains };
-}
-
+function normalizeCriteria(items) { const byName = new Map((Array.isArray(items) ? items : []).filter((item) => names.includes(item?.name)).map((item) => [item.name, item])); return names.map((name) => { const item = byName.get(name); return { name, score: Math.max(1, Math.min(4, Number(item?.score) || 1)), applicable: Boolean(item?.applicable), evidence: String(item?.evidence || "대화에서 이 요소에 관한 구체적 수행 근거가 확인되지 않았습니다.") }; }); }
 export const config = { path: "/api/evaluate", method: ["POST"] };
+
