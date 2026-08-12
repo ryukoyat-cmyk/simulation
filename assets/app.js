@@ -17,7 +17,7 @@ const PARENTS = [
 ];
 const TEACHERS = [{ id: "preservice", label: "예비교원", image: "assets/cards/preservice.svg", detail: "교직 진입 전 민원 대응의 기본 언어와 절차를 연습합니다." }, { id: "inservice", label: "현직교원", image: "assets/cards/inservice.svg", detail: "학교 맥락의 대응 범위와 협업 절차를 점검합니다." }];
 const SCHOOLS = [{ id: "elementary", label: "초등학교", image: "assets/cards/elementary.svg", detail: "학생 생활·보호와 일상 소통 맥락" }, { id: "middle", label: "중학교", image: "assets/cards/middle.svg", detail: "관계 갈등과 생활지도 맥락" }, { id: "high", label: "고등학교", image: "assets/cards/high.svg", detail: "진로·평가·수업 맥락" }];
-const footer = `<footer class="copyright"><strong>© 2026 백재윤. All Rights Reserved.</strong><span>예비교원의 학부모 민원 대응 역량 강화를 위한 AI 기반 시뮬레이션</span></footer>`;
+const footer = `<footer class="copyright"><strong>© 2026 박재윤. All Rights Reserved.</strong><span>예비교원의 학부모 민원 대응 역량 강화를 위한 AI 기반 시뮬레이션</span></footer>`;
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 const uid = () => crypto.randomUUID?.() || `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 function freshState() { return { screen: "title", teacherType: "", schoolLevel: "", parentId: "cooperative", situationMode: "", randomSituation: "", randomContext: "", manualSituation: "", situation: "", situationContext: "", msgs: [], apiMsgs: [], sessionId: uid(), loading: false, evaluating: false, ended: false, feedback: [], evaluation: null, error: "" }; }
