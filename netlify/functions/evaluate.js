@@ -1,4 +1,9 @@
-import { createWithFallback, json, readJson, saveToSupabase } from "./_shared.js";
+import { createWithFallback, errorResponse, getEnv, json, readJson, saveToSupabase } from "./_shared.js";
+
+// 플랫폼이 함수를 강제 종료하기 전에 우리가 먼저 포기해야 JSON 오류로 응답할 수 있습니다.
+// 강제 종료되면 브라우저는 JSON 대신 HTML 오류 페이지를 받고 파싱 오류를 띄웁니다.
+// 환경변수는 요청 시점에 읽습니다. 모듈 로드 시점에는 Netlify 환경이 아직 준비되지 않을 수 있습니다.
+const evalTimeout = () => Number(getEnv("OPENAI_EVAL_TIMEOUT_MS")) || 20000;
 
 const criteria = [
   ["요구 파악", "학부모의 핵심 요구와 쟁점을 경청하고 확인한다."], ["사실 확인", "추측 전에 필요한 사실관계를 질문하고 확인한다."], ["공감적 표현", "감정을 인정하되 성급히 동의하지 않는다."], ["명료한 설명", "상황·판단·가능한 조치를 이해하기 쉽게 설명한다."],
@@ -6,12 +11,23 @@ const criteria = [
   ["사안 판단", "교사가 직접 대응할 수 있는 사안인지 판단한다."], ["대응 범위 설정", "무리한 약속 없이 대응 가능한 범위를 설명한다."], ["후속 절차 안내", "확인·보고·회신 등 이후 절차를 안내한다."], ["경계 설정", "부당 요구·폭언 등의 허용 범위를 분명히 설정한다."], ["이관·보고 판단", "관리자 또는 학교 민원대응체계 이관을 적절히 판단한다."], ["대응 중단 판단", "정상 응대가 불가능할 때 적절히 대응을 종료한다."]
 ];
 const names = criteria.map(([name]) => name);
-const responseFormat = {
-  type: "json_schema", json_schema: { name: "teacher_response_evaluation", strict: true,
+
+// 평가는 서버리스 함수의 실행 제한 안에서 끝나야 합니다.
+// 예전에는 1차 평가와 2차 검토를 순서대로 호출했는데, 추론 모델 두 번을 이어 붙이면
+// 제한 시간을 넘겨 함수가 강제 종료되고 브라우저에는 JSON 대신 플랫폼 오류 페이지가 도착합니다.
+// 요소 채점과 서술 피드백은 서로를 기다릴 필요가 없으므로 둘로 쪼개 동시에 호출합니다.
+const criteriaFormat = {
+  type: "json_schema", json_schema: { name: "criteria_scores", strict: true,
     schema: { type: "object", additionalProperties: false, properties: {
-      summary: { type: "string" }, overallFeedback: { type: "string" }, strengths: { type: "array", items: { type: "string" } }, improvements: { type: "array", items: { type: "string" } },
       criteria: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string", enum: names }, score: { type: "integer", minimum: 1, maximum: 4 }, applicable: { type: "boolean" }, evidence: { type: "string" } }, required: ["name", "score", "applicable", "evidence"] } }
-    }, required: ["summary", "overallFeedback", "strengths", "improvements", "criteria"] }
+    }, required: ["criteria"] }
+  }
+};
+const narrativeFormat = {
+  type: "json_schema", json_schema: { name: "evaluation_narrative", strict: true,
+    schema: { type: "object", additionalProperties: false, properties: {
+      summary: { type: "string" }, overallFeedback: { type: "string" }, strengths: { type: "array", items: { type: "string" } }, improvements: { type: "array", items: { type: "string" } }
+    }, required: ["summary", "overallFeedback", "strengths", "improvements"] }
   }
 };
 
@@ -24,18 +40,26 @@ export default async (req) => {
     const convo = body.messages.map((m) => `${m.role === "parent" ? "학부모" : "교사"}: ${m.content}`).join("\n");
     const system = `당신은 예비·현직교원의 학부모 민원 대응 연습을 평가하는 교육 전문가입니다. 반드시 JSON 스키마만 반환합니다.\n\n[평가 원칙]\n- 아래 14개 요소 각각을 대화의 실제 교사 발화에 근거해 1~4점으로 평가합니다.\n- 상황상 관찰할 기회가 없거나 해당하지 않는 요소만 applicable:false로 처리합니다. 그 경우에도 score는 1~4 정수로 채우되 총점 계산에서 제외됩니다.\n- 해당 없음은 편의상 주지 마세요. 대화에서 기대 가능한 요소인데 드러나지 않았다면 applicable:true, 1점으로 평가하세요.\n- evidence는 해당 점수의 구체적 대화 근거 또는 미흡 사유를 한 문장으로 씁니다.\n- 점수: 4=일관되고 적절한 수행, 3=대체로 적절하나 일부 불명확, 2=부분 인식·수행, 1=수행되지 않음 또는 부적절.\n- 강점·개선점은 2~4개, 종합 의견은 학습 피드백으로 간결히 씁니다.\n\n[14개 요소]\n${criteria.map(([name, detail], i) => `${i + 1}. ${name}: ${detail}`).join("\n")}`;
     const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: ${body.schoolLevel || "미선택"}\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}\n대화 기록:\n${convo}`;
-    const firstRaw = await createWithFallback({ model: process.env.OPENAI_PRIMARY_EVAL_MODEL || "gpt-5-mini", reasoningEffort: "none", system, input: context, maxOutputTokens: 2400, responseFormat }, "gpt-4.1-mini");
-    const first = JSON.parse(firstRaw);
-    const reviewSystem = `${system}\n\n당신은 2차 검토자입니다. 아래 1차 평가의 점수·근거·누락이 실제 교사 발화와 일치하는지 검토하고, 필요한 항목만 조정하여 같은 JSON 스키마로 최종 평가를 작성하세요.`;
-    const secondRaw = await createWithFallback({ model: process.env.OPENAI_SECONDARY_EVAL_MODEL || "gpt-5", reasoningEffort: "low", system: reviewSystem, input: `${context}\n\n1차 평가 초안:\n${JSON.stringify(first)}`, maxOutputTokens: 2600, responseFormat }, "gpt-4.1");
-    const evaluation = JSON.parse(secondRaw);
-    evaluation.criteria = normalizeCriteria(evaluation.criteria);
+    const model = getEnv("OPENAI_PRIMARY_EVAL_MODEL") || "gpt-4.1-mini";
+    const [scored, narrative] = await Promise.all([
+      createWithFallback({ model, reasoningEffort: "low", system, input: context, maxOutputTokens: 2000, responseFormat: criteriaFormat, timeoutMs: evalTimeout() }, "gpt-4.1-mini")
+        .then((raw) => JSON.parse(raw)),
+      createWithFallback({ model, reasoningEffort: "low", system: `${system}\n\n지금은 점수표가 아니라 학습 피드백 서술만 작성합니다. 요소별 점수는 매기지 마세요.`, input: context, maxOutputTokens: 800, responseFormat: narrativeFormat, timeoutMs: evalTimeout() }, "gpt-4.1-mini")
+        .then((raw) => JSON.parse(raw))
+        // 서술 피드백이 실패해도 점수표는 그대로 보여 줍니다. 없는 내용을 지어내지 않고 비었음을 밝힙니다.
+        .catch((error) => { console.error("narrative pass failed:", error.detail || error.message); return null; })
+    ]);
+
+    const evaluation = narrative
+      ? { ...narrative }
+      : { summary: "요소별 점수는 정상적으로 산출되었습니다.", overallFeedback: "종합 의견을 생성하지 못했습니다. 아래 요소별 근거를 확인해 주세요.", strengths: [], improvements: [], narrativeDegraded: true };
+    evaluation.criteria = normalizeCriteria(scored.criteria);
     const applicable = evaluation.criteria.filter((item) => item.applicable);
     evaluation.score = applicable.length ? Math.round((applicable.reduce((sum, item) => sum + item.score, 0) / applicable.length) * 14 * 10) / 10 : 0;
     evaluation.applicableCount = applicable.length;
     if (body.sessionId) await saveToSupabase("simulation_evaluations", { session_id: body.sessionId, parent_type: body.parentType, situation: body.situation, score: evaluation.score, summary: evaluation.summary, strengths: evaluation.strengths, improvements: evaluation.improvements, conversation: { messages: body.messages, teacherType: body.teacherType, schoolLevel: body.schoolLevel, situationContext: body.situationContext || null, criteria: evaluation.criteria, overallFeedback: evaluation.overallFeedback } });
     return json(evaluation);
-  } catch (error) { console.error(error); return json({ error: error.message || "Evaluation failed" }, 500); }
+  } catch (error) { return errorResponse(error, "평가를 완료하지 못했습니다. 대화 기록은 그대로 남아 있으니 잠시 후 다시 시도해 주세요."); }
 };
 function normalizeCriteria(items) { const byName = new Map((Array.isArray(items) ? items : []).filter((item) => names.includes(item?.name)).map((item) => [item.name, item])); return names.map((name) => { const item = byName.get(name); return { name, score: Math.max(1, Math.min(4, Number(item?.score) || 1)), applicable: Boolean(item?.applicable), evidence: String(item?.evidence || "대화에서 이 요소에 관한 구체적 수행 근거가 확인되지 않았습니다.") }; }); }
 export const config = { path: "/api/evaluate", method: ["POST"] };

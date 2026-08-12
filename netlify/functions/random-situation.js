@@ -1,4 +1,4 @@
-import { createOpenAIResponse, json, readJson } from "./_shared.js";
+import { createOpenAIResponse, getEnv, json, readJson } from "./_shared.js";
 import { complaintCases, complaintCaseStats } from "./_complaint_cases.js";
 
 const scenarioAngles = [
@@ -57,7 +57,7 @@ export default async (req) => {
 
   try {
     const raw = await createOpenAIResponse({
-      model: process.env.OPENAI_SCENARIO_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+      model: getEnv("OPENAI_SCENARIO_MODEL") || getEnv("OPENAI_MODEL") || "gpt-4.1-mini",
       system: [
         "당신은 교사 민원 대응 시뮬레이션을 위한 현실적인 민원 상황 생성자입니다.",
         "실제 사례 조각을 직접 복사하지 말고, 개인정보와 고유 사건 정보를 제거한 새 가상 상황으로 재구성하세요.",

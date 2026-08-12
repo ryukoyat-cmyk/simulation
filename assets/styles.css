@@ -571,6 +571,25 @@ button:disabled {
   border: 1px solid rgba(42, 78, 95, 0.13);
 }
 
+/* 자동 재생이 막히거나 음성 합성이 실패해도 다시 들을 수 있는 통로를 남겨 둡니다. */
+.replay-button {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border: 1px solid rgba(42, 78, 95, 0.2);
+  border-radius: 999px;
+  background: #f4f8fb;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.replay-button:hover {
+  background: #e3edf3;
+}
+
 .msg-teacher {
   align-self: flex-end;
   color: #fff;
@@ -865,7 +884,15 @@ button:disabled {
 .send-button, .voice-button { height: 56px; min-width: 92px; padding: 0 16px; border-radius: 16px; color: #fff; font-weight: 800; cursor: pointer; }
 .voice-button { background: #315e77; }
 .voice-button.listening { background: #c45762; animation: voicePulse 1.1s ease-in-out infinite; }
+/* 음성 모드는 켜져 있지만 학부모 발화나 응답 대기로 마이크가 잠시 닫힌 상태입니다.
+   버튼이 꺼진 것처럼 보이면 사용자가 다시 눌러 모드를 꺼 버리므로 켜짐을 유지해 보여 줍니다. */
+.voice-button.standby { background: #4d7f96; }
+.voice-button:disabled { opacity: .55; cursor: not-allowed; }
 @keyframes voicePulse { 50% { transform: scale(.97); } }
+.feedback-idle { color: var(--muted); }
+.feedback-message { margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: #f4f8fb; line-height: 1.55; }
+.feedback-line { margin: 6px 0; font-size: .9rem; }
+.feedback-tag { display: inline-block; margin-right: 6px; padding: 2px 8px; border-radius: 999px; background: #e3edf3; color: #315e77; font-size: .75rem; font-weight: 800; }
 .simulation-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
 .simulation-info div { padding: 10px; border-radius: 12px; background: #f4f8fb; }
 .simulation-info div:last-child { grid-column: 1 / -1; }

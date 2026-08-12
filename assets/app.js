@@ -20,7 +20,7 @@ const SCHOOLS = [{ id: "elementary", label: "초등학교", image: "assets/cards
 const footer = `<footer class="copyright"><strong>© 2026 박재윤. All Rights Reserved.</strong><span>예비교원의 학부모 민원 대응 역량 강화를 위한 AI 기반 시뮬레이션</span></footer>`;
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 const uid = () => crypto.randomUUID?.() || `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-function freshState() { return { screen: "title", teacherType: "", schoolLevel: "", parentId: "cooperative", situationMode: "", randomSituation: "", randomContext: "", manualSituation: "", situation: "", situationContext: "", msgs: [], apiMsgs: [], sessionId: uid(), loading: false, evaluating: false, ended: false, feedback: [], evaluation: null, error: "" }; }
+function freshState() { return { screen: "title", teacherType: "", schoolLevel: "", parentId: "cooperative", situationMode: "", randomSituation: "", randomContext: "", manualSituation: "", situation: "", situationContext: "", msgs: [], apiMsgs: [], sessionId: uid(), loading: false, evaluating: false, ended: false, feedback: [], turnFeedback: null, feedbackLoading: false, evaluation: null, error: "", draft: "", listening: false, speaking: false, autoVoice: false }; }
 let S = freshState();
 const parent = () => PARENTS.find((x) => x.id === S.parentId) || PARENTS[0];
 const teacher = () => TEACHERS.find((x) => x.id === S.teacherType);
@@ -38,40 +38,286 @@ function renderSchool() { selectionPage({ step: "02", title: "학교급을 선�
 function renderParent() { selectionPage({ step: "03", title: "학부모 유형을 선택해 주세요", items: PARENTS, current: S.parentId, type: "parent", back: () => { S.screen = "school"; render(); }, next: () => { S.screen = "situation"; render(); } }); }
 function renderSituation() { const isRandom = S.situationMode === "random", isManual = S.situationMode === "manual", current = isRandom ? S.randomSituation : S.manualSituation; app.innerHTML = `<main class="page"><section class="page-center situation-page"><p class="step-index">STEP 04</p><h2 class="step-title">민원 상황을 선택해 주세요</h2><p class="step-copy">기존 사례 기반 상황을 생성하거나 연습할 상황을 직접 입력할 수 있습니다.</p><div class="choice-grid"><section class="choice-panel glass ${isRandom ? "selected" : ""}"><div class="choice-head"><h3>상황 생성하기</h3><button class="mode-button" id="randomMode">선택</button></div><p class="choice-help">선택한 학교급의 맥락을 반영한 가상 민원 상황을 만듭니다.</p><button class="dice-button" id="generate" type="button">✦</button><textarea id="randomInput" class="situation-textarea" placeholder="생성된 민원 상황이 표시됩니다.">${esc(S.randomSituation)}</textarea></section><section class="choice-panel glass ${isManual ? "selected" : ""}"><div class="choice-head"><h3>직접 입력하기</h3><button class="mode-button" id="manualMode">선택</button></div><p class="choice-help">개인정보를 제외한 가상 상황만 입력해 주세요.</p><textarea id="manualInput" class="situation-textarea" placeholder="연습할 민원 상황을 입력해 주세요. (개인정보는 절대 입력하지 마세요)">${esc(S.manualSituation)}</textarea></section></div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button><button class="btn-primary" id="next" ${current.trim() ? "" : "disabled"}>대화 시작</button></div>${footer}</section></main>`; const setMode = (mode) => { S.situationMode = mode; renderSituation(); }; $("randomMode").onclick = () => setMode("random"); $("manualMode").onclick = () => setMode("manual"); $("randomInput").oninput = (e) => { S.situationMode = "random"; S.randomSituation = e.target.value; $("next").disabled = !e.target.value.trim(); }; $("manualInput").oninput = (e) => { S.situationMode = "manual"; S.manualSituation = e.target.value; $("next").disabled = !e.target.value.trim(); }; $("generate").onclick = generateSituation; $("back").onclick = () => { S.screen = "parent"; render(); }; $("next").onclick = startSimulation; }
 async function generateSituation() { S.situationMode = "random"; const button = $("generate"); button.disabled = true; try { const res = await fetch("/api/random-situation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teacherType: teacher()?.label, schoolLevel: school()?.label }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); S.randomSituation = data.situation || ""; S.randomContext = data.situationContext || data.context || S.randomSituation; } catch (e) { S.randomSituation = `${school()?.label || "학교"}에서 학생 생활과 관련해 학부모가 사실 확인과 후속 조치를 요청하는 상황입니다.`; S.randomContext = S.randomSituation; } renderSituation(); }
-function renderMessages() { if (!S.msgs.length) return `<div class="msg msg-system">AI 학부모가 대화를 시작하는 중입니다.</div>`; return S.msgs.map((m) => `<div class="msg msg-${m.role}">${m.role === "parent" || m.role === "teacher" ? `<span class="speaker-label">${m.role === "parent" ? "학부모" : "교사"}</span>` : ""}${esc(m.content)}</div>`).join(""); }
-function renderSimulation() { const turns = teacherTurns(), locked = S.loading || S.evaluating || S.ended; app.innerHTML = `<main class="page"><section class="sim-page"><div class="sim-layout"><section class="chat-panel glass"><div class="chat-panel-head"><div class="box-label">대화 연습</div><span class="state-badge ${S.ended ? "" : "muted"}">${S.ended ? "대화 마무리" : "진행 중"}</span></div><div class="chat-history" id="history">${renderMessages()}${S.loading ? `<div class="msg msg-system">학부모가 응답을 준비하고 있습니다…</div>` : ""}</div><div class="input-strip"><textarea id="teacherInput" class="teacher-input" placeholder="교사 역할로 답변해 주세요." ${locked ? "disabled" : ""}></textarea><div class="input-actions"><button id="voice" class="voice-button" ${locked ? "disabled" : ""}>🎙 음성</button><button id="send" class="send-button" ${locked ? "disabled" : ""}>전송</button></div></div></section><aside class="right-panel glass"><section class="side-section"><div class="box-label">연습 정보</div><dl class="simulation-info"><div><dt>교원 유형</dt><dd>${esc(teacher()?.label)}</dd></div><div><dt>학교급</dt><dd>${esc(school()?.label)}</dd></div><div><dt>학부모 유형</dt><dd>${esc(parent().label)}</dd></div></dl><h3 class="parent-name">${esc(parent().label)}</h3><p>${esc(parent().desc)}</p><div class="scenario-copy"><span>민원 상황</span><p>${esc(S.situation)}</p></div></section><section class="side-section"><div class="box-label">즉시 피드백</div><p>${S.feedback.length ? `드러난 요소: ${S.feedback.join(" · ")}` : "교사 발화 후 핵심 수행 요소를 짧게 안내합니다."}</p></section></aside></div><div class="action-row"><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="retry">같은 조건 재도전</button><button class="btn-primary" id="evaluate" ${turns >= 4 && !S.loading && !S.evaluating ? "" : "disabled"}>대화 종료 및 평가</button></div>${footer}</section></main>${S.evaluating ? `<div class="analysis-overlay" role="status"><div class="analysis-card"><span class="analysis-spinner"></span><strong>결과 분석 중입니다.</strong><p>조금만 기다려주세요.</p></div></div>` : ""}`; $("home").onclick = () => { S = freshState(); render(); }; $("retry").onclick = restart; $("evaluate").onclick = evaluate; if ($("send")) $("send").onclick = send; if ($("voice")) $("voice").onclick = toggleVoiceInput; requestAnimationFrame(() => { if ($("history")) $("history").scrollTop = $("history").scrollHeight; }); }
-let speechRecognition = null;
-let isListening = false;
-function toggleVoiceInput() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) { alert("이 브라우저에서는 음성 인식을 지원하지 않습니다. 텍스트 입력을 이용해 주세요."); return; }
-  if (isListening && speechRecognition) { speechRecognition.stop(); return; }
-  speechRecognition = new SpeechRecognition();
-  speechRecognition.lang = "ko-KR";
-  speechRecognition.interimResults = true;
-  speechRecognition.continuous = false;
-  let transcript = "";
-  speechRecognition.onstart = () => { isListening = true; const button = $("voice"); if (button) { button.textContent = "■ 녹음 종료"; button.classList.add("listening"); } };
-  speechRecognition.onresult = (event) => { transcript = Array.from(event.results).map((result) => result[0].transcript).join(""); const input = $("teacherInput"); if (input) input.value = transcript; };
-  speechRecognition.onerror = () => { const input = $("teacherInput"); if (input && !input.value) input.placeholder = "음성 인식에 실패했습니다. 텍스트로 입력해 주세요."; };
-  speechRecognition.onend = () => { isListening = false; const button = $("voice"); if (button) { button.textContent = "🎙 음성"; button.classList.remove("listening"); } };
-  speechRecognition.start();
-}
-async function apiFetchJson(url, options, retries = 2) { let lastError; for (let attempt = 0; attempt <= retries; attempt += 1) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000); try { const res = await fetch(url, { ...options, signal: controller.signal }); clearTimeout(timer); const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || "요청을 처리하지 못했습니다."); return data; } catch (error) { clearTimeout(timer); lastError = error; if (attempt >= retries) break; await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1))); } } throw lastError || new Error("네트워크 요청에 실패했습니다."); }
-async function chat(initial = false) { return apiFetchJson("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: school()?.label, parentId: parent().id, parentType: parent().label, situation: S.situation, situationContext: S.situationContext, system: systemPrompt(), messages: S.apiMsgs, initial, teacherTurns: teacherTurns() }) }); }
-function fallbackParentOpening() { const p = parent(); const base = S.situation || "금쪽이와 관련해 학교에서 있었던 일을 확인하고 싶은 상황입니다."; if (p.id === "pressure") return `선생님, ${base} 이 부분은 그냥 넘어가기 어렵습니다. 지금 확인 가능한 내용과 언제 다시 연락 주실 수 있는지 바로 말씀해 주세요.`; if (p.id === "anxious") return `선생님, ${base} 금쪽이가 집에서 많이 불안해해서요. 학교에서 실제로 어떤 일이 있었는지 차분히 확인해 주실 수 있을까요?`; if (p.id === "avoidant") return `선생님, ${base} 전에 말씀드렸을 때도 흐지부지된 적이 있어서 솔직히 걱정됩니다. 이번에는 정확히 확인하고 답을 들을 수 있을까요?`; if (p.id === "demanding") return `선생님, ${base} 관련해서 학교가 확인한 사실과 가능한 조치 범위를 분명히 알고 싶습니다. 처리 절차와 회신 시점도 함께 안내해 주세요.`; return `선생님, ${base} 아이 이야기를 듣고 연락드렸습니다. 우선 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 알고 싶습니다.`; }
-async function startSimulation() { S.situation = (S.situationMode === "random" ? S.randomSituation : S.manualSituation).trim(); S.situationContext = S.situationMode === "random" ? (S.randomContext || S.situation) : S.situation; S.msgs = []; S.apiMsgs = []; S.evaluation = null; S.ended = false; S.loading = true; S.screen = "simulation"; render(); try { const data = await chat(true); S.apiMsgs.push({ role: "assistant", content: data.text }); S.msgs.push({ role: "parent", content: data.text }); } catch (e) { const text = fallbackParentOpening(); S.apiMsgs.push({ role: "assistant", content: text }); S.msgs.push({ role: "parent", content: text }); S.msgs.push({ role: "system", content: "일시적인 네트워크 문제로 기본 학부모 발화로 시작했습니다. 이후에도 오류가 반복되면 새로고침 후 다시 시도해 주세요." }); } finally { S.loading = false; render(); } }
-async function send() { const input = $("teacherInput"), text = input?.value.trim(); if (!text || S.loading || S.ended) return; S.msgs.push({ role: "teacher", content: text }); S.apiMsgs.push({ role: "user", content: text }); S.loading = true; render(); try { const data = await chat(); S.apiMsgs.push({ role: "assistant", content: data.text }); S.msgs.push({ role: "parent", content: data.text }); S.ended = Boolean(data.ended); S.feedback = Array.isArray(data.metCriteria) ? data.metCriteria : []; } catch (e) { S.msgs.push({ role: "system", content: `AI 응답 오류: ${e.message}. 잠시 후 다시 시도해 주세요.` }); } finally { S.loading = false; render(); } }
-async function restart() { S.sessionId = uid(); await startSimulation(); }
-async function evaluate() { if (teacherTurns() < 4 || S.evaluating) return; S.evaluating = true; S.error = ""; render(); try { const res = await fetch("/api/evaluate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: school()?.label, parentType: parent().label, situation: S.situation, situationContext: S.situationContext, messages: S.msgs }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error || "평가를 생성하지 못했습니다."); S.evaluation = normalizeEvaluation(data); S.screen = "result"; } catch (e) { S.error = e.message || "평가 중 오류가 발생했습니다."; } finally { S.evaluating = false; render(); } }
-function normalizeEvaluation(data) { const source = new Map((data.criteria || []).map((x) => [x.name, x])); const criteria = CRITERIA.map(([domain, name]) => ({ domain, name, score: Math.max(1, Math.min(4, Number(source.get(name)?.score) || 1)), applicable: Boolean(source.get(name)?.applicable), evidence: source.get(name)?.evidence || "구체적 근거가 확인되지 않았습니다." })); const applicable = criteria.filter((x) => x.applicable); const score = Number(data.score) || (applicable.length ? Math.round(applicable.reduce((sum, x) => sum + x.score, 0) / applicable.length * 140) / 10 : 0); return { ...data, score, criteria, applicableCount: applicable.length }; }
-function renderResult() { const e = S.evaluation, domainHTML = ["Ⅰ. 의사소통", "Ⅱ. 갈등 완화", "Ⅲ. 절차적 대응"].map((domain) => { const items = e.criteria.filter((x) => x.domain === domain && x.applicable); const avg = items.length ? (items.reduce((s, x) => s + x.score, 0) / items.length).toFixed(1) : "해당 없음"; return `<article class="domain-score"><span>${domain}</span><strong>${avg}${items.length ? " / 4" : ""}</strong><small>${items.length}개 관찰</small></article>`; }).join(""); const rows = e.criteria.map((x) => `<tr><td>${x.domain}</td><td>${x.name}</td><td>${x.applicable ? `${x.score}점` : "해당 없음"}</td><td>${esc(x.evidence)}</td></tr>`).join(""); app.innerHTML = `<main class="page"><section class="result-page" id="resultCapture"><header class="result-hero"><p class="eyebrow">SIMULATION RESULT</p><h1>종합 평가 결과</h1><p>${esc(e.summary)}</p><div class="result-score"><span>환산 총점</span><strong>${e.score.toFixed(1)}</strong><em>/ 56점</em><small>관찰 요소 ${e.applicableCount}개 기준</small></div></header><section class="domain-grid">${domainHTML}</section><section class="result-section glass"><h2>종합 의견</h2><p>${esc(e.overallFeedback)}</p><div class="feedback-columns"><div><h3>강점</h3><ul>${(e.strengths || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>대화 기록을 바탕으로 다음 시도에서 확인해 보세요.</li>"}</ul></div><div><h3>보완점</h3><ul>${(e.improvements || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>사실 확인과 후속 절차 안내를 구체화해 보세요.</li>"}</ul></div></div></section><section class="result-section glass"><h2>14개 요소별 근거</h2><div class="table-wrap"><table class="result-table"><thead><tr><th>영역</th><th>요소</th><th>점수</th><th>근거</th></tr></thead><tbody>${rows}</tbody></table></div></section><section class="result-section glass conversation-export"><h2>대화 기록</h2>${S.msgs.map((m) => `<p><strong>${m.role === "teacher" ? "교사" : m.role === "parent" ? "학부모" : "안내"}</strong> ${esc(m.content)}</p>`).join("")}</section></section><div class="result-actions"><button class="btn-primary" id="retry">동일 조건 재도전</button><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="survey">설문 참여하기</button><button class="btn-outline" id="pdf">PDF 결과 저장</button></div>${footer}</main>`; $("retry").onclick = restart; $("home").onclick = () => { S = freshState(); render(); }; $("survey").onclick = () => window.open(SURVEY_URL, "_blank", "noopener"); $("pdf").onclick = savePdf; }
-async function savePdf() { if (!window.html2canvas || !window.jspdf?.jsPDF) { alert("PDF 저장 도구를 불러오지 못했습니다. 인터넷 연결 후 다시 시도해 주세요."); return; } const target = $("resultCapture"); try { const canvas = await window.html2canvas(target, { backgroundColor: "#f6fbfb", scale: 2, useCORS: true, windowWidth: target.scrollWidth, windowHeight: target.scrollHeight }); const { jsPDF } = window.jspdf; const pdf = new jsPDF("p", "mm", "a4"); const width = 190, pageHeight = 277.2, scaledHeight = canvas.height * width / canvas.width; for (let y = 0, page = 0; y < scaledHeight; y += pageHeight, page += 1) { if (page) pdf.addPage(); pdf.addImage(canvas.toDataURL("image/png"), "PNG", 10, 10 - y, width, scaledHeight); } pdf.save(`학부모민원대응_평가결과_${new Date().toISOString().slice(0, 10)}.pdf`); } catch (e) { console.error(e); alert("PDF 저장 중 오류가 발생했습니다."); } }
-const runEvaluation = evaluate;
-evaluate = async function showEvaluationFailure() {
-  await runEvaluation();
-  if (S.error) alert(`평가를 완료하지 못했습니다: ${S.error}\n\n대화 기록은 보존되었습니다. 잠시 후 다시 시도해 주세요.`);
-};
+function renderMessages() { if (!S.msgs.length) return `<div class="msg msg-system">AI 학부모가 대화를 시작하는 중입니다.</div>`; return S.msgs.map((m, index) => `<div class="msg msg-${m.role}">${m.role === "parent" || m.role === "teacher" ? `<span class="speaker-label">${m.role === "parent" ? "학부모" : "교사"}</span>` : ""}${esc(m.content)}${m.role === "parent" ? `<button class="replay-button" type="button" data-index="${index}" title="이 발화를 다시 듣기" aria-label="이 발화를 다시 듣기">🔊</button>` : ""}</div>`).join(""); }
+function renderSimulation() { const turns = teacherTurns(), locked = S.loading || S.evaluating || S.ended; app.innerHTML = `<main class="page"><section class="sim-page"><div class="sim-layout"><section class="chat-panel glass"><div class="chat-panel-head"><div class="box-label">대화 연습</div><span class="state-badge ${S.ended ? "" : "muted"}">${simStateLabel()}</span></div><div class="chat-history" id="history">${renderMessages()}${S.loading ? `<div class="msg msg-system">학부모가 응답을 준비하고 있습니다…</div>` : ""}</div><div class="input-strip"><textarea id="teacherInput" class="teacher-input" placeholder="${S.listening ? "말씀하시면 자동으로 입력됩니다." : "교사 역할로 답변해 주세요."}" ${locked ? "disabled" : ""}></textarea><div class="input-actions"><button id="voice" class="voice-button ${S.listening ? "listening" : ""}${S.autoVoice && !S.listening ? " standby" : ""}" ${voiceButtonDisabled() ? "disabled" : ""}>${voiceButtonLabel()}</button><button id="send" class="send-button" ${locked ? "disabled" : ""}>전송</button></div></div></section><aside class="right-panel glass"><section class="side-section"><div class="box-label">연습 정보</div><dl class="simulation-info"><div><dt>교원 유형</dt><dd>${esc(teacher()?.label)}</dd></div><div><dt>학교급</dt><dd>${esc(school()?.label)}</dd></div><div><dt>학부모 유형</dt><dd>${esc(parent().label)}</dd></div></dl><h3 class="parent-name">${esc(parent().label)}</h3><p>${esc(parent().desc)}</p><div class="scenario-copy"><span>민원 상황</span><p>${esc(S.situation)}</p></div></section><section class="side-section"><div class="box-label">즉시 피드백</div><div id="turnFeedback">${renderTurnFeedback()}</div></section></aside></div><div class="action-row"><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="retry">같은 조건 재도전</button><button class="btn-primary" id="evaluate" ${turns >= 4 && !S.loading && !S.evaluating ? "" : "disabled"}>대화 종료 및 평가</button></div>${footer}</section></main>${S.evaluating ? `<div class="analysis-overlay" role="status"><div class="analysis-card"><span class="analysis-spinner"></span><strong>결과 분석 중입니다.</strong><p>조금만 기다려주세요.</p></div></div>` : ""}`; $("home").onclick = () => { stopVoice(); S = freshState(); render(); }; $("retry").onclick = restart; $("evaluate").onclick = evaluate; const input = $("teacherInput"); if (input) { input.value = S.draft; input.oninput = (e) => { S.draft = e.target.value; }; } if ($("send")) $("send").onclick = send; if ($("voice")) $("voice").onclick = toggleVoiceInput; document.querySelectorAll(".replay-button").forEach((el) => { el.onclick = () => { const message = S.msgs[Number(el.dataset.index)]; if (message) { unlockAudio(); speakParent(message.content); } }; }); requestAnimationFrame(() => { if ($("history")) $("history").scrollTop = $("history").scrollHeight; }); }
+// ── 음성 대화 ─────────────────────────────────────────────────────────────
+// 학부모 발화는 TTS로 재생하고, 교사 발화는 마이크로 받아 무음 1.8초에 자동 전송합니다.
+// 학부모 음성 재생이 끝나면 마이크를 자동으로 다시 열어 대화가 끊기지 않게 합니다.
+const SILENCE_COMMIT_MS = 1800;
+const MAX_EMPTY_RESTARTS = 5;
+const SILENT_CLIP = "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+let recognition = null;
+let silenceTimer = null;
+let restartTimer = null;
+let stopIntent = "";
+let listenBase = "";
+let listenFinal = "";
+let emptyRestarts = 0;
+let parentAudio = null;
+let feedbackSeq = 0;
+const noticeShown = new Set();
 
+function simStateLabel() { return S.speaking ? "학부모 발화 중" : S.listening ? "음성 입력 중" : S.ended ? "대화 마무리" : S.autoVoice ? "음성 대기 중" : "진행 중"; }
+// 버튼은 마이크가 열린 순간이 아니라 사용자가 켠 음성 모드를 나타냅니다.
+// 말이 끊기거나 학부모가 말하는 동안에도 켠 상태가 유지되어야 다시 누를 필요가 없습니다.
+function voiceButtonLabel() { return S.autoVoice ? (S.listening ? "⏸ 음성 일시정지" : "⏸ 음성 대기 중") : "🎙 음성 시작"; }
+// 음성 모드를 끄는 조작은 학부모가 말하는 중에도 막지 않습니다. 대화가 끝난 뒤에만 잠급니다.
+function voiceButtonDisabled() { return S.evaluating || S.ended; }
+function canListen() { return S.screen === "simulation" && !S.loading && !S.speaking && !S.ended && !S.evaluating; }
+function syncSim() { if (S.screen === "simulation") renderSimulation(); }
+function notify(key, message) { if (noticeShown.has(key)) return; noticeShown.add(key); S.msgs.push({ role: "system", content: message }); syncSim(); }
+
+// 전체 재렌더링 없이 음성 상태만 반영합니다. 녹음 중 화면이 튀거나 입력이 사라지지 않게 합니다.
+function paintVoiceState() {
+  const button = $("voice");
+  if (button) { button.textContent = voiceButtonLabel(); button.classList.toggle("listening", S.listening); button.classList.toggle("standby", S.autoVoice && !S.listening); button.disabled = voiceButtonDisabled(); }
+  const badge = document.querySelector(".state-badge");
+  if (badge) badge.textContent = simStateLabel();
+  const input = $("teacherInput");
+  if (input) { if (input.value !== S.draft) input.value = S.draft; input.placeholder = S.listening ? "말씀하시면 자동으로 입력됩니다." : "교사 역할로 답변해 주세요."; }
+}
+
+// 즉시 피드백은 방금 교사 발화에 대한 것이라 학부모 응답과 따로 도착합니다.
+// 전체 재렌더링을 하면 녹음 중 입력이 흔들리므로 이 패널만 갱신합니다.
+function renderTurnFeedback() {
+  if (S.feedbackLoading) return `<p class="feedback-idle">방금 하신 말씀을 살펴보는 중입니다…</p>`;
+  const fb = S.turnFeedback;
+  const met = fb?.met?.length ? fb.met : S.feedback;
+  const blocks = [];
+  if (met.length) blocks.push(`<p class="feedback-line"><span class="feedback-tag">드러난 요소</span>${met.map(esc).join(" · ")}</p>`);
+  if (fb?.message) blocks.push(`<p class="feedback-message">${esc(fb.message)}</p>`);
+  if (fb?.next?.length) blocks.push(`<p class="feedback-line"><span class="feedback-tag">다음에 이어가기</span>${fb.next.map(esc).join(" · ")}</p>`);
+  return blocks.join("") || `<p class="feedback-idle">교사 발화 후 핵심 수행 요소를 짧게 안내합니다.</p>`;
+}
+
+function paintFeedback() { const panel = $("turnFeedback"); if (panel) panel.innerHTML = renderTurnFeedback(); }
+
+// 학부모 응답과 나란히 요청해 대기 시간을 늘리지 않습니다.
+// 연달아 전송하면 이전 요청의 응답이 뒤늦게 덮어쓸 수 있어 순번으로 걸러냅니다.
+async function requestTurnFeedback(teacherText, history) {
+  const seq = (feedbackSeq += 1);
+  S.turnFeedback = null; S.feedbackLoading = true; paintFeedback();
+  try {
+    const data = await apiFetchJson("/api/turn-feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teacherText, messages: history, parentType: parent().label, situation: S.situation }) }, 0);
+    if (seq !== feedbackSeq) return;
+    if (data && !data.degraded) S.turnFeedback = data;
+  } catch (error) {
+    // 피드백이 실패해도 대화 연습은 그대로 이어집니다.
+  } finally {
+    if (seq === feedbackSeq) { S.feedbackLoading = false; paintFeedback(); }
+  }
+}
+
+function setDraft(value) { S.draft = value; const input = $("teacherInput"); if (input) input.value = value; }
+function joinDraft(...parts) { return parts.map((part) => String(part || "").trim()).filter(Boolean).join(" ").trim(); }
+
+function ensureRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  if (recognition) return recognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = "ko-KR";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.onstart = () => { S.listening = true; paintVoiceState(); };
+  recognition.onresult = handleRecognitionResult;
+  recognition.onerror = (event) => handleRecognitionError(event.error);
+  recognition.onend = handleRecognitionEnd;
+  return recognition;
+}
+
+function handleRecognitionResult(event) {
+  let interim = "";
+  for (let i = event.resultIndex; i < event.results.length; i += 1) {
+    const result = event.results[i], chunk = result[0]?.transcript || "";
+    if (result.isFinal) listenFinal = joinDraft(listenFinal, chunk); else interim = joinDraft(interim, chunk);
+  }
+  setDraft(joinDraft(listenBase, listenFinal, interim));
+  if (S.draft.trim()) emptyRestarts = 0;
+  scheduleSilenceCommit();
+}
+
+function scheduleSilenceCommit() {
+  clearTimeout(silenceTimer);
+  if (!S.draft.trim()) return;
+  silenceTimer = setTimeout(() => stopListening("commit"), SILENCE_COMMIT_MS);
+}
+
+function handleRecognitionError(code) {
+  if (code === "no-speech" || code === "aborted") return;
+  if (code === "not-allowed" || code === "service-not-allowed") { S.autoVoice = false; notify("mic-denied", "마이크 권한이 차단되어 음성 입력을 사용할 수 없습니다. 브라우저 주소창의 마이크 아이콘에서 권한을 허용한 뒤 다시 시도해 주세요."); return; }
+  if (code === "audio-capture") { S.autoVoice = false; notify("mic-missing", "마이크 장치를 찾지 못했습니다. 장치 연결을 확인하거나 텍스트로 입력해 주세요."); return; }
+  notify("mic-network", "음성 인식이 일시적으로 중단되었습니다. 마이크 버튼을 다시 누르거나 텍스트로 입력해 주세요.");
+}
+
+function handleRecognitionEnd() {
+  clearTimeout(silenceTimer); silenceTimer = null;
+  S.listening = false;
+  const intent = stopIntent, text = S.draft.trim();
+  stopIntent = "";
+  paintVoiceState();
+  // 껐다가 곧바로 다시 켜면 취소된 인식의 onend가 새 모드보다 늦게 도착합니다.
+  // 여기서 모드를 다시 확인하지 않으면 버튼은 켜진 채로 마이크만 닫혀 있게 됩니다.
+  if (intent === "cancel") { if (S.autoVoice && canListen()) startListening(); return; }
+  if (intent === "commit" && text) { send(); return; }
+  if (!S.autoVoice) return;
+  // 브라우저가 무음으로 스스로 종료한 경우입니다. 말한 내용이 있으면 보내고, 없으면 다시 엽니다.
+  if (text) { send(); return; }
+  emptyRestarts += 1;
+  // 브라우저가 무음으로 곧바로 인식을 끝내는 일이 반복되면 재시작 간격을 늘려 과부하를 막습니다.
+  // 음성 모드 자체는 사용자가 버튼으로 끄기 전까지 유지합니다.
+  if (emptyRestarts === MAX_EMPTY_RESTARTS) notify("mic-idle", "마이크는 계속 켜져 있습니다. 말씀하시면 이어서 입력되고, 멈추고 싶으면 음성 버튼을 눌러 주세요.");
+  clearTimeout(restartTimer);
+  restartTimer = setTimeout(() => { restartTimer = null; if (S.autoVoice && canListen()) startListening(); }, Math.min(300 * emptyRestarts, 2000));
+}
+
+function startListening() {
+  const active = ensureRecognition();
+  if (!active) { S.autoVoice = false; notify("voice-unsupported", "이 브라우저는 음성 인식을 지원하지 않습니다. 아래 입력창에 텍스트로 답변해 주세요."); return; }
+  if (S.listening) return;
+  listenBase = S.draft.trim();
+  listenFinal = "";
+  stopIntent = "";
+  try { active.start(); } catch (error) { /* 이미 시작된 상태면 무시합니다. */ }
+}
+
+function stopListening(intent = "cancel") {
+  clearTimeout(silenceTimer); silenceTimer = null;
+  if (!recognition || !S.listening) { stopIntent = ""; return; }
+  stopIntent = intent;
+  try { recognition.stop(); } catch (error) { S.listening = false; paintVoiceState(); }
+}
+
+// 버튼은 음성 모드만 켜고 끕니다. 말이 끝났다고 모드가 저절로 꺼지지 않으므로
+// 한 번 켜 두면 여러 턴을 이어서 말할 수 있고, 멈추고 싶을 때만 다시 누르면 됩니다.
+function toggleVoiceInput() {
+  unlockAudio();
+  clearTimeout(restartTimer); restartTimer = null;
+  if (S.autoVoice) {
+    S.autoVoice = false;
+    stopListening("cancel");
+    paintVoiceState();
+    return;
+  }
+  S.autoVoice = true;
+  emptyRestarts = 0;
+  paintVoiceState();
+  // 학부모가 말하는 중이면 재생이 끝난 뒤 maybeResumeVoice가 마이크를 엽니다.
+  if (canListen()) startListening();
+}
+
+function maybeResumeVoice() { clearTimeout(restartTimer); restartTimer = null; if (S.autoVoice && canListen() && !S.listening) { emptyRestarts = 0; startListening(); } paintVoiceState(); }
+
+function stopVoice() {
+  S.autoVoice = false; S.speaking = false;
+  clearTimeout(silenceTimer); silenceTimer = null;
+  clearTimeout(restartTimer); restartTimer = null;
+  stopIntent = "cancel";
+  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } }
+  S.listening = false;
+  try { window.speechSynthesis?.cancel(); } catch (error) { /* 무시합니다. */ }
+  if (parentAudio) { try { parentAudio.pause(); } catch (error) { /* 무시합니다. */ } }
+}
+
+// 브라우저 자동 재생 정책 때문에, 첫 발화 오디오는 사용자의 클릭 시점에 미리 열어 두어야 합니다.
+// fetch를 기다린 뒤 play()를 호출하면 제스처 컨텍스트가 만료되어 iOS에서 재생이 막힙니다.
+function unlockAudio() {
+  if (!parentAudio) { parentAudio = new Audio(); parentAudio.preload = "auto"; }
+  if (parentAudio.dataset?.unlocked) return;
+  try {
+    parentAudio.src = SILENT_CLIP;
+    const played = parentAudio.play();
+    if (played?.catch) played.catch(() => {});
+    parentAudio.dataset.unlocked = "1";
+  } catch (error) { /* 재생 실패 시에도 텍스트 대화는 계속됩니다. */ }
+}
+
+function playClip(src) {
+  return new Promise((resolve, reject) => {
+    if (!parentAudio) parentAudio = new Audio();
+    const finish = (ok) => { parentAudio.onended = null; parentAudio.onerror = null; ok ? resolve() : reject(new Error("audio playback failed")); };
+    parentAudio.onended = () => finish(true);
+    parentAudio.onerror = () => finish(false);
+    parentAudio.src = src;
+    const played = parentAudio.play();
+    if (played?.catch) played.catch(() => finish(false));
+  });
+}
+
+// 크롬은 음성 목록을 비동기로 채웁니다. 목록이 비어 있는 동안 speak를 부르면
+// 한국어 음성이 선택되지 않아 아무 소리도 나지 않은 채 끝나는 일이 생깁니다.
+function koreanVoice() {
+  const synth = window.speechSynthesis;
+  const voices = synth?.getVoices?.() || [];
+  if (!voices.length) return null;
+  return voices.find((v) => v.lang === "ko-KR") || voices.find((v) => (v.lang || "").startsWith("ko")) || null;
+}
+
+function waitForVoices(timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    if (koreanVoice() || (window.speechSynthesis?.getVoices?.() || []).length) { resolve(); return; }
+    const done = () => { clearTimeout(timer); window.speechSynthesis.onvoiceschanged = null; resolve(); };
+    const timer = setTimeout(done, timeoutMs);
+    try { window.speechSynthesis.onvoiceschanged = done; } catch (error) { done(); }
+  });
+}
+
+async function speakWithBrowser(text) {
+  const synth = window.speechSynthesis;
+  if (!synth || !window.SpeechSynthesisUtterance) throw new Error("speech synthesis unavailable");
+  await waitForVoices();
+  return new Promise((resolve, reject) => {
+    try {
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voice = koreanVoice();
+      if (voice) utterance.voice = voice;
+      utterance.lang = voice?.lang || "ko-KR";
+      // 일부 브라우저는 onend를 끝내 부르지 않습니다. 그러면 마이크가 영원히 열리지 않으므로
+      // 글자 수에 맞춘 상한을 두고 그때는 끝난 것으로 처리합니다.
+      const guard = setTimeout(() => { finish(true); }, Math.min(30000, 4000 + text.length * 110));
+      let settled = false;
+      const finish = (ok) => { if (settled) return; settled = true; clearTimeout(guard); utterance.onend = null; utterance.onerror = null; ok ? resolve() : reject(new Error("speech synthesis failed")); };
+      utterance.onend = () => finish(true);
+      utterance.onerror = () => finish(false);
+      synth.speak(utterance);
+    } catch (error) { reject(error); }
+  });
+}
+
+async function speakParent(text) {
+  if (!text) { maybeResumeVoice(); return; }
+  stopListening("cancel");
+  S.speaking = true; paintVoiceState();
+  try {
+    const data = await apiFetchJson("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, parentId: parent().id }) }, 1);
+    await playClip(`data:${data.mime || "audio/mpeg"};base64,${data.audio}`);
+  } catch (error) {
+    try { await speakWithBrowser(text); } catch (fallbackError) { notify("audio-blocked", "학부모 음성을 재생하지 못했습니다. 대화 내용은 위에 글로 표시되며 연습은 그대로 이어갈 수 있습니다."); }
+  } finally {
+    S.speaking = false; paintVoiceState(); maybeResumeVoice();
+  }
+}
+// 키가 거부됐거나 요청이 잘못된 경우는 다시 보내도 결과가 같으므로 즉시 포기합니다.
+// 연결이 끊기거나 서버가 일시적으로 실패한 경우에만 재시도합니다.
+function isFatalApiError(status, code) { if (code === "auth") return true; return status >= 400 && status < 500 && status !== 429; }
+// 함수가 실행 제한을 넘겨 강제 종료되면 서버가 아니라 플랫폼이 HTML 오류 페이지를 돌려줍니다.
+// 그대로 JSON.parse하면 "Unexpected token '<'"가 화면에 그대로 노출되므로 여기서 걸러 냅니다.
+function describeNonJson(status) {
+  if (status === 504 || status === 502 || status === 0) return "서버가 제한 시간 안에 응답을 끝내지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  if (status === 404) return "요청한 기능을 서버에서 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.";
+  return `서버가 예상치 못한 응답을 보냈습니다. (HTTP ${status})`;
+}
+async function apiFetchJson(url, options, retries = 2) { let lastError; for (let attempt = 0; attempt <= retries; attempt += 1) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000); try { const res = await fetch(url, { ...options, signal: controller.signal }); clearTimeout(timer); const raw = await res.text(); let data = null; try { data = raw ? JSON.parse(raw) : {}; } catch (parseError) { data = null; } if (data === null) { const error = new Error(describeNonJson(res.status)); error.fatal = res.status === 404; throw error; } if (!res.ok) { const error = new Error(data.error || "요청을 처리하지 못했습니다."); error.code = data.code; error.fatal = isFatalApiError(res.status, data.code); throw error; } return data; } catch (error) { clearTimeout(timer); lastError = error; if (error?.fatal || attempt >= retries) break; await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1))); } } throw lastError || new Error("네트워크 요청에 실패했습니다."); }
+async function chat(initial = false) { return apiFetchJson("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: school()?.label, parentId: parent().id, parentType: parent().label, situation: S.situation, situationContext: S.situationContext, system: systemPrompt(), messages: S.apiMsgs, initial, teacherTurns: teacherTurns() }) }); }
+// 서버에 아예 닿지 못했을 때만 쓰는 대사입니다. 상황 설명문은 3인칭 서술이라 낭독하면 지문처럼 들리므로 인용하지 않습니다.
+function fallbackParentOpening() { const p = parent(); if (p.id === "pressure") return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요."; if (p.id === "anxious") return "선생님, 금쪽이 엄마입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요."; if (p.id === "avoidant") return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다."; if (p.id === "demanding") return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다."; return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다."; }
+async function startSimulation() { unlockAudio(); stopVoice(); noticeShown.clear(); S.situation = (S.situationMode === "random" ? S.randomSituation : S.manualSituation).trim(); S.situationContext = S.situationMode === "random" ? (S.randomContext || S.situation) : S.situation; S.msgs = []; S.apiMsgs = []; S.draft = ""; S.evaluation = null; S.ended = false; S.feedback = []; S.turnFeedback = null; S.feedbackLoading = false; feedbackSeq += 1; S.loading = true; S.screen = "simulation"; render(); let opening = ""; try { const data = await chat(true); opening = data.text; S.apiMsgs.push({ role: "assistant", content: opening }); S.msgs.push({ role: "parent", content: opening }); if (data.degraded) S.msgs.push({ role: "system", content: "AI 발화 생성에 실패해 기본 대사로 시작했습니다. 상황에 맞춘 발화가 아니므로, 오른쪽 '민원 상황'을 기준으로 연습해 주세요. 반복되면 사이트 환경변수의 OPENAI_API_KEY를 확인해 주세요." }); } catch (e) { opening = fallbackParentOpening(); S.apiMsgs.push({ role: "assistant", content: opening }); S.msgs.push({ role: "parent", content: opening }); S.msgs.push({ role: "system", content: "일시적인 네트워크 문제로 기본 학부모 발화로 시작했습니다. 이후에도 오류가 반복되면 새로고침 후 다시 시도해 주세요." }); } finally { S.loading = false; render(); } await speakParent(opening); }
+async function send() { const text = (S.draft || $("teacherInput")?.value || "").trim(); if (!text || S.loading || S.ended) return; stopListening("cancel"); setDraft(""); S.msgs.push({ role: "teacher", content: text }); S.apiMsgs.push({ role: "user", content: text }); S.loading = true; render(); requestTurnFeedback(text, S.msgs.slice()); let reply = ""; try { const data = await chat(); reply = data.text; S.apiMsgs.push({ role: "assistant", content: reply }); S.msgs.push({ role: "parent", content: reply }); S.ended = Boolean(data.ended); S.feedback = Array.isArray(data.metCriteria) ? data.metCriteria : []; } catch (e) { S.msgs.push({ role: "system", content: `AI 응답 오류: ${e.message}${e.fatal ? " 문제가 계속되면 /api/health 를 열어 어떤 항목이 실패하는지 확인해 주세요." : ""}` }); } finally { S.loading = false; render(); } if (reply) await speakParent(reply); else maybeResumeVoice(); }
+async function restart() { stopVoice(); S.sessionId = uid(); await startSimulation(); }
+async function evaluate() { if (teacherTurns() < 4 || S.evaluating) return; stopVoice(); S.evaluating = true; S.error = ""; render(); try { const data = await apiFetchJson("/api/evaluate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: school()?.label, parentType: parent().label, situation: S.situation, situationContext: S.situationContext, messages: S.msgs }) }); S.evaluation = normalizeEvaluation(data); S.screen = "result"; } catch (e) { S.error = e.message || "평가 중 오류가 발생했습니다."; } finally { S.evaluating = false; render(); } if (S.error) alert(`평가를 완료하지 못했습니다.\n\n${S.error}\n\n대화 기록은 그대로 남아 있습니다.`); }
+function normalizeEvaluation(data) { const source = new Map((data.criteria || []).map((x) => [x.name, x])); const criteria = CRITERIA.map(([domain, name]) => ({ domain, name, score: Math.max(1, Math.min(4, Number(source.get(name)?.score) || 1)), applicable: Boolean(source.get(name)?.applicable), evidence: source.get(name)?.evidence || "구체적 근거가 확인되지 않았습니다." })); const applicable = criteria.filter((x) => x.applicable); const score = Number(data.score) || (applicable.length ? Math.round(applicable.reduce((sum, x) => sum + x.score, 0) / applicable.length * 140) / 10 : 0); return { ...data, score, criteria, applicableCount: applicable.length }; }
+function renderResult() { const e = S.evaluation, domainHTML = ["Ⅰ. 의사소통", "Ⅱ. 갈등 완화", "Ⅲ. 절차적 대응"].map((domain) => { const items = e.criteria.filter((x) => x.domain === domain && x.applicable); const avg = items.length ? (items.reduce((s, x) => s + x.score, 0) / items.length).toFixed(1) : "해당 없음"; return `<article class="domain-score"><span>${domain}</span><strong>${avg}${items.length ? " / 4" : ""}</strong><small>${items.length}개 관찰</small></article>`; }).join(""); const rows = e.criteria.map((x) => `<tr><td>${x.domain}</td><td>${x.name}</td><td>${x.applicable ? `${x.score}점` : "해당 없음"}</td><td>${esc(x.evidence)}</td></tr>`).join(""); app.innerHTML = `<main class="page"><section class="result-page" id="resultCapture"><header class="result-hero"><p class="eyebrow">SIMULATION RESULT</p><h1>종합 평가 결과</h1><p>${esc(e.summary)}</p><div class="result-score"><span>환산 총점</span><strong>${e.score.toFixed(1)}</strong><em>/ 56점</em><small>관찰 요소 ${e.applicableCount}개 기준</small></div></header><section class="domain-grid">${domainHTML}</section><section class="result-section glass"><h2>종합 의견</h2><p>${esc(e.overallFeedback)}</p><div class="feedback-columns"><div><h3>강점</h3><ul>${(e.strengths || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>대화 기록을 바탕으로 다음 시도에서 확인해 보세요.</li>"}</ul></div><div><h3>보완점</h3><ul>${(e.improvements || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>사실 확인과 후속 절차 안내를 구체화해 보세요.</li>"}</ul></div></div></section><section class="result-section glass"><h2>14개 요소별 근거</h2><div class="table-wrap"><table class="result-table"><thead><tr><th>영역</th><th>요소</th><th>점수</th><th>근거</th></tr></thead><tbody>${rows}</tbody></table></div></section><section class="result-section glass conversation-export"><h2>대화 기록</h2>${S.msgs.map((m) => `<p><strong>${m.role === "teacher" ? "교사" : m.role === "parent" ? "학부모" : "안내"}</strong> ${esc(m.content)}</p>`).join("")}</section></section><div class="result-actions"><button class="btn-primary" id="retry">동일 조건 재도전</button><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="survey">설문 참여하기</button><button class="btn-outline" id="pdf">PDF 결과 저장</button></div>${footer}</main>`; $("retry").onclick = restart; $("home").onclick = () => { stopVoice(); S = freshState(); render(); }; $("survey").onclick = () => window.open(SURVEY_URL, "_blank", "noopener"); $("pdf").onclick = savePdf; }
+async function savePdf() { if (!window.html2canvas || !window.jspdf?.jsPDF) { alert("PDF 저장 도구를 불러오지 못했습니다. 인터넷 연결 후 다시 시도해 주세요."); return; } const target = $("resultCapture"); try { const canvas = await window.html2canvas(target, { backgroundColor: "#f6fbfb", scale: 2, useCORS: true, windowWidth: target.scrollWidth, windowHeight: target.scrollHeight }); const { jsPDF } = window.jspdf; const pdf = new jsPDF("p", "mm", "a4"); const width = 190, pageHeight = 277.2, scaledHeight = canvas.height * width / canvas.width; for (let y = 0, page = 0; y < scaledHeight; y += pageHeight, page += 1) { if (page) pdf.addPage(); pdf.addImage(canvas.toDataURL("image/png"), "PNG", 10, 10 - y, width, scaledHeight); } pdf.save(`학부모민원대응_평가결과_${new Date().toISOString().slice(0, 10)}.pdf`); } catch (e) { console.error(e); alert("PDF 저장 중 오류가 발생했습니다."); } }
 render();
 

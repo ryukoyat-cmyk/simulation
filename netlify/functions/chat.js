@@ -1,4 +1,12 @@
-import { createWithFallback, json, readJson, saveToSupabase } from "./_shared.js";
+import { createWithFallback, errorResponse, getEnv, json, readJson, saveToSupabase } from "./_shared.js";
+
+// 학부모 대사는 자연스러운 구어체가 핵심이라 추론 모델보다 대화형 모델이 잘 맞습니다.
+// 사이트에서 OPENAI_CHAT_MODEL로 따로 지정하면 그 값이 우선합니다.
+// process.env 대신 getEnv를 쓰는 이유: Netlify Functions v2에서는 Netlify.env가 정본이라
+// process.env만 읽으면 사이트에 등록한 모델이 조용히 무시되고 기본값으로 되돌아갑니다.
+function chatModel() {
+  return getEnv("OPENAI_CHAT_MODEL") || getEnv("OPENAI_MODEL") || "gpt-4.1";
+}
 
 const metCriteriaEnum = [
   "요구 파악",
@@ -71,7 +79,14 @@ export default async (req) => {
     }));
 
     if (isInitial) {
-      const text = buildInitialParentText(parentKey, parentType, situation);
+      const { text, degraded } = await createInitialParentText({
+        parentKey,
+        parentType,
+        situation,
+        situationContext,
+        teacherType: String(body.teacherType || ""),
+        schoolLevel: String(body.schoolLevel || "")
+      });
       if (body.sessionId) {
         await saveToSupabase("simulation_messages", {
           session_id: body.sessionId,
@@ -81,7 +96,7 @@ export default async (req) => {
           content: text
         });
       }
-      return json({ text, ended: false, metCriteria: [] });
+      return json({ text, ended: false, metCriteria: [], degraded });
     }
 
     const system = `
@@ -107,7 +122,8 @@ ${body.system}
 `.trim();
 
     const raw = await createWithFallback({
-      model: process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+      model: chatModel(),
+      reasoningEffort: "low",
       system,
       input,
       maxOutputTokens: body.maxTokens || 1200,
@@ -143,8 +159,7 @@ ${body.system}
 
     return json({ text, ended, metCriteria });
   } catch (error) {
-    console.error(error);
-    return json({ error: error.message || "Chat failed" }, 500);
+    return errorResponse(error, "학부모 응답을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
 };
 
@@ -153,34 +168,97 @@ export const config = {
   method: ["POST"]
 };
 
-function buildInitialParentText(parentKey, parentType, situation) {
-  const topic = cleanSituation(situation);
-  const base = topic || "금쪽이와 관련해 학교에서 있었던 일을 확인하고 싶어 연락드렸습니다.";
-  if (parentKey === "anxious" || parentType === "걱정형") {
-    return `선생님, 저는 금쪽이 학부모입니다. ${base} 금쪽이가 집에 와서 많이 신경 쓰는 것 같아 걱정돼서요. 학교에서 실제로 어떤 일이 있었는지, 그리고 아이 상태를 어떻게 살펴봐 주실 수 있는지 확인하고 싶습니다.`;
+const openingFormat = {
+  type: "json_schema",
+  json_schema: {
+    name: "parent_opening_line",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: { text: { type: "string" } },
+      required: ["text"]
+    }
   }
-  if (parentKey === "avoidant" || parentType === "회피형") {
-    return `선생님, 저는 금쪽이 학부모입니다. ${base} 예전에도 비슷한 이야기를 했을 때 명확히 정리되지 않았던 기억이 있어서 조금 조심스럽습니다. 이번에는 확인된 내용과 앞으로의 절차를 분명히 들을 수 있을까요?`;
+};
+
+// 첫 발화는 화면에 표시되는 동시에 TTS로 낭독됩니다.
+// 상황 서술문을 그대로 읽으면 대사와 지문이 섞여 들리므로, 학부모 자신의 말로 다시 말하게 합니다.
+async function createInitialParentText({ parentKey, parentType, situation, situationContext, teacherType, schoolLevel }) {
+  const fallback = { text: buildInitialParentText(parentKey, parentType), degraded: true };
+  if (!situation) return fallback;
+
+  const system = `
+당신은 학부모 민원 대응 연습의 AI 학부모입니다. 지금은 교사에게 처음 연락해 민원을 꺼내는 순간입니다.
+
+[상황]
+교원 유형: ${teacherType || "미선택"}
+학교급: ${schoolLevel || "미선택"}
+민원 상황: ${situation}
+상세 맥락: ${situationContext || situation}
+
+[학부모 유형: ${parentType}]
+${parentProfiles[parentKey] || parentProfiles[parentType] || "선택된 학부모 유형의 설명을 따르세요."}
+
+[말하기 방식]
+지금은 학부모가 교사에게 전화를 걸어 첫 마디를 꺼내는 순간입니다. 이 발화는 음성으로 재생되므로,
+글로 읽을 때가 아니라 귀로 들을 때 실제 통화처럼 들려야 합니다.
+
+- 짧은 인사와 자기소개로 시작한 뒤 곧바로 용건을 꺼냅니다.
+- 상황 설명문을 요약하지 말고, 자기가 겪은 일 중 지금 가장 마음에 걸리는 것 하나만 꺼내세요.
+  민원 내용을 처음부터 빠짐없이 늘어놓는 사람은 없습니다.
+- 말하듯 씁니다. 문장 길이가 들쭉날쭉해도 좋고, 완결된 문어체보다 실제 통화 말투가 낫습니다.
+- 2~3문장으로 짧게 말합니다. 한 문장을 길게 늘이지 마세요.
+- 교사에게 직접 말하는 1인칭으로만 씁니다. 자녀는 "금쪽이"로 부릅니다.
+- 첫 문장부터 ${parentType}의 감정과 말투가 드러나야 합니다.
+
+[좋은 예 - 걱정형]
+선생님, 안녕하세요. 금쪽이 엄마입니다. 다름이 아니라 어제 아이가 집에 와서는 말도 없이 방에만 있어서요. 혹시 학교에서 무슨 일 있었는지 여쭤보려고 전화드렸어요.
+
+[나쁜 예 - 이렇게 쓰지 마세요]
+학부모는 자녀가 교실에서 겪은 일에 대해 사실 확인과 후속 조치를 요청하고 있습니다. (제3자 해설)
+선생님, 저는 금쪽이의 학부모로서 어제 발생한 교실 내 갈등 상황에 관하여 사실관계 확인 및 향후 조치 계획에 대해 문의드리고자 연락드렸습니다. (문어체 낭독문)
+
+[금지]
+- "학부모는", "학부모가", "상황은", "교사는" 같은 제3자 해설이나 시뮬레이션 설명
+- 괄호, 따옴표, 목록 기호, 이모지, 영문 약어, 항목 나열
+- 욕설, 협박, 혐오 표현
+- 상황에 없는 새 사건이나 쟁점
+`.trim();
+
+  try {
+    const raw = await createWithFallback({
+      model: chatModel(),
+      reasoningEffort: "low",
+      system,
+      input: "지금 교사에게 건네는 첫 민원 발화를 작성하세요.",
+      maxOutputTokens: 900,
+      responseFormat: openingFormat
+    }, "gpt-4.1-mini");
+    const text = String(JSON.parse(raw).text || "").trim();
+    return text ? { text, degraded: false } : fallback;
+  } catch (error) {
+    console.warn("Initial parent utterance generation failed; using template.", error.message);
+    return fallback;
   }
-  if (parentKey === "demanding" || parentType === "요구형") {
-    return `선생님, 저는 금쪽이 학부모입니다. ${base} 이 사안에 대해 학교가 확인한 사실, 교사가 대응할 수 있는 범위, 그리고 공식적인 처리 절차를 구체적으로 안내해 주세요. 언제까지 회신받을 수 있는지도 알고 싶습니다.`;
-  }
-  if (parentKey === "pressure" || parentType === "압박형") {
-    return `선생님, 저는 금쪽이 학부모입니다. ${base} 이 부분은 그냥 넘어가기 어렵습니다. 지금 확인된 내용이 무엇인지, 누가 어떻게 확인할 건지, 언제까지 답을 주실 건지 바로 말씀해 주세요.`;
-  }
-  return `선생님, 저는 금쪽이 학부모입니다. ${base} 우선 학교에서 확인된 내용이 있는지 알고 싶습니다. 가능하면 사실관계와 앞으로의 확인 절차를 함께 정리해 주시면 좋겠습니다.`;
 }
 
-function cleanSituation(value) {
-  const sentences = String(value || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .match(/[^.!?。！？]+[.!?。！？]?/g) || [];
-  const eventSentences = sentences
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence && !/^학부모는/.test(sentence));
-  return (eventSentences[0] || sentences[0] || "")
-    .replace(/^학부모는\s*/, "")
-    .trim()
-    .slice(0, 180);
+// 생성이 실패했을 때만 쓰는 대사입니다.
+// 상황 설명문은 3인칭 서술이라 그대로 끼워 넣으면 지문을 낭독하는 것처럼 들리므로,
+// 여기서는 상황을 인용하지 않고 학부모가 실제로 꺼낼 법한 말로만 시작합니다.
+// 구체적인 상황은 화면 오른쪽 '민원 상황' 패널에 그대로 표시됩니다.
+function buildInitialParentText(parentKey, parentType) {
+  if (parentKey === "anxious" || parentType === "걱정형") {
+    return "선생님, 금쪽이 엄마입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요.";
+  }
+  if (parentKey === "avoidant" || parentType === "회피형") {
+    return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다.";
+  }
+  if (parentKey === "demanding" || parentType === "요구형") {
+    return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다.";
+  }
+  if (parentKey === "pressure" || parentType === "압박형") {
+    return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요.";
+  }
+  return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다.";
 }
