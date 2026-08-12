@@ -172,9 +172,15 @@ function buildInitialParentText(parentKey, parentType, situation) {
 }
 
 function cleanSituation(value) {
-  return String(value || "")
+  const sentences = String(value || "")
     .replace(/\s+/g, " ")
+    .trim()
+    .match(/[^.!?。！？]+[.!?。！？]?/g) || [];
+  const eventSentences = sentences
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence && !/^학부모는/.test(sentence));
+  return (eventSentences[0] || sentences[0] || "")
     .replace(/^학부모는\s*/, "")
     .trim()
-    .slice(0, 260);
+    .slice(0, 180);
 }
