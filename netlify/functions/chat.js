@@ -1,4 +1,12 @@
-import { createWithFallback, errorResponse, json, readJson, saveToSupabase } from "./_shared.js";
+import { createWithFallback, errorResponse, getEnv, json, readJson, saveToSupabase } from "./_shared.js";
+
+// 학부모 대사는 자연스러운 구어체가 핵심이라 추론 모델보다 대화형 모델이 잘 맞습니다.
+// 사이트에서 OPENAI_CHAT_MODEL로 따로 지정하면 그 값이 우선합니다.
+// process.env 대신 getEnv를 쓰는 이유: Netlify Functions v2에서는 Netlify.env가 정본이라
+// process.env만 읽으면 사이트에 등록한 모델이 조용히 무시되고 기본값으로 되돌아갑니다.
+function chatModel() {
+  return getEnv("OPENAI_CHAT_MODEL") || getEnv("OPENAI_MODEL") || "gpt-4.1";
+}
 
 const metCriteriaEnum = [
   "요구 파악",
@@ -114,7 +122,8 @@ ${body.system}
 `.trim();
 
     const raw = await createWithFallback({
-      model: process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+      model: chatModel(),
+      reasoningEffort: "low",
       system,
       input,
       maxOutputTokens: body.maxTokens || 1200,
@@ -191,24 +200,39 @@ async function createInitialParentText({ parentKey, parentType, situation, situa
 [학부모 유형: ${parentType}]
 ${parentProfiles[parentKey] || parentProfiles[parentType] || "선택된 학부모 유형의 설명을 따르세요."}
 
-[낭독 제약]
-- 이 발화는 음성으로 소리 내어 재생됩니다. 귀로 들었을 때 자연스러워야 합니다.
-- 위 상황 문장을 그대로 옮겨 적지 말고, 학부모가 직접 겪은 일처럼 자기 말로 바꿔 말하세요.
-- "학부모는", "학부모가", "상황은", "교사는"처럼 제3자 해설이나 시뮬레이션 설명을 쓰지 마세요.
-- 교사에게 직접 말하는 1인칭 구어체로만 씁니다. 자녀는 "금쪽이"로 부릅니다.
-- 2~3문장으로 짧게 말합니다. 한 문장이 너무 길어지지 않게 합니다.
-- 괄호, 따옴표, 목록 기호, 이모지, 영문 약어, 항목 나열은 쓰지 마세요.
-- 첫 문장에서 선택된 학부모 유형(${parentType})의 감정과 말투가 분명히 드러나야 합니다.
-- 욕설, 협박, 혐오 표현은 쓰지 않습니다.
-- 상황에 없는 새 사건이나 쟁점을 만들지 마세요.
+[말하기 방식]
+지금은 학부모가 교사에게 전화를 걸어 첫 마디를 꺼내는 순간입니다. 이 발화는 음성으로 재생되므로,
+글로 읽을 때가 아니라 귀로 들을 때 실제 통화처럼 들려야 합니다.
+
+- 짧은 인사와 자기소개로 시작한 뒤 곧바로 용건을 꺼냅니다.
+- 상황 설명문을 요약하지 말고, 자기가 겪은 일 중 지금 가장 마음에 걸리는 것 하나만 꺼내세요.
+  민원 내용을 처음부터 빠짐없이 늘어놓는 사람은 없습니다.
+- 말하듯 씁니다. 문장 길이가 들쭉날쭉해도 좋고, 완결된 문어체보다 실제 통화 말투가 낫습니다.
+- 2~3문장으로 짧게 말합니다. 한 문장을 길게 늘이지 마세요.
+- 교사에게 직접 말하는 1인칭으로만 씁니다. 자녀는 "금쪽이"로 부릅니다.
+- 첫 문장부터 ${parentType}의 감정과 말투가 드러나야 합니다.
+
+[좋은 예 - 걱정형]
+선생님, 안녕하세요. 금쪽이 엄마입니다. 다름이 아니라 어제 아이가 집에 와서는 말도 없이 방에만 있어서요. 혹시 학교에서 무슨 일 있었는지 여쭤보려고 전화드렸어요.
+
+[나쁜 예 - 이렇게 쓰지 마세요]
+학부모는 자녀가 교실에서 겪은 일에 대해 사실 확인과 후속 조치를 요청하고 있습니다. (제3자 해설)
+선생님, 저는 금쪽이의 학부모로서 어제 발생한 교실 내 갈등 상황에 관하여 사실관계 확인 및 향후 조치 계획에 대해 문의드리고자 연락드렸습니다. (문어체 낭독문)
+
+[금지]
+- "학부모는", "학부모가", "상황은", "교사는" 같은 제3자 해설이나 시뮬레이션 설명
+- 괄호, 따옴표, 목록 기호, 이모지, 영문 약어, 항목 나열
+- 욕설, 협박, 혐오 표현
+- 상황에 없는 새 사건이나 쟁점
 `.trim();
 
   try {
     const raw = await createWithFallback({
-      model: process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+      model: chatModel(),
+      reasoningEffort: "low",
       system,
       input: "지금 교사에게 건네는 첫 민원 발화를 작성하세요.",
-      maxOutputTokens: 400,
+      maxOutputTokens: 900,
       responseFormat: openingFormat
     }, "gpt-4.1-mini");
     const text = String(JSON.parse(raw).text || "").trim();

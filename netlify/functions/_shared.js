@@ -32,6 +32,7 @@ export function getEnv(name) {
 }
 
 const DEFAULT_TIMEOUT_MS = 25000;
+const REASONING_HEADROOM_TOKENS = 1200;
 
 // fetch 자체가 실패하면 undici는 message로 "fetch failed"만 남기고
 // 실제 사유(DNS, 연결 거부, TLS, 타임아웃)는 error.cause에 숨깁니다.
@@ -64,7 +65,7 @@ async function fetchWithTimeout(url, options, { label, timeoutMs = DEFAULT_TIMEO
   }
 }
 
-export async function createOpenAIResponse({ system, input, maxOutputTokens = 600, responseFormat, model, reasoningEffort }) {
+export async function createOpenAIResponse({ system, input, maxOutputTokens = 600, responseFormat, model, reasoningEffort, timeoutMs }) {
   const apiKey = getEnv("OPENAI_API_KEY");
   if (!apiKey) {
     const missing = new Error("AI 서비스 키가 설정되지 않았습니다. 사이트 환경변수의 OPENAI_API_KEY를 등록해 주세요.");
@@ -74,19 +75,24 @@ export async function createOpenAIResponse({ system, input, maxOutputTokens = 60
   }
 
   const selectedModel = model || getEnv("OPENAI_MODEL") || "gpt-5-mini";
+  const isReasoningModel = /^(gpt-5|o[134])/i.test(selectedModel);
+
+  // 추론 모델은 내부 추론 토큰도 max_completion_tokens에서 함께 차감합니다.
+  // 짧은 발화를 만들려고 예산을 작게 잡으면 추론만 하다 끝나 content가 빈 문자열로 돌아옵니다.
+  // 짧은 대사를 요구하는 호출일수록 이 함정에 걸리므로 여유분을 따로 얹습니다.
   const body = {
     model: selectedModel,
     messages: [
       { role: "system", content: system },
       ...normalizeMessages(input)
     ],
-    max_completion_tokens: maxOutputTokens
+    max_completion_tokens: isReasoningModel ? maxOutputTokens + REASONING_HEADROOM_TOKENS : maxOutputTokens
   };
 
   if (responseFormat) body.response_format = responseFormat;
-  if (/^gpt-5/i.test(selectedModel) && reasoningEffort) body.reasoning_effort = reasoningEffort;
+  if (isReasoningModel && reasoningEffort) body.reasoning_effort = reasoningEffort;
 
-  const timeoutMs = Number(getEnv("OPENAI_TIMEOUT_MS")) || DEFAULT_TIMEOUT_MS;
+  const budget = timeoutMs || Number(getEnv("OPENAI_TIMEOUT_MS")) || DEFAULT_TIMEOUT_MS;
   const res = await withRetry(() => fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -101,10 +107,16 @@ export async function createOpenAIResponse({ system, input, maxOutputTokens = 60
     throw toUserFacingError(res.status, data.error?.message);
   }
 
-  const content = data.choices?.[0]?.message?.content?.trim() || "";
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content?.trim() || "";
   if (!content) {
+    // finish_reason이 length면 토큰이 모자란 것이고, 그 외에는 모델이 응답을 거절한 경우입니다.
+    // 어느 쪽인지 로그에 남겨야 예산 문제와 프롬프트 문제를 구분할 수 있습니다.
     const empty = new Error("AI 서비스가 빈 응답을 반환했습니다.");
-    empty.detail = `Empty completion from ${selectedModel}.`;
+    empty.code = "upstream";
+    empty.detail = `Empty completion from ${selectedModel} (finish_reason=${choice?.finish_reason || "unknown"}, `
+      + `reasoning_tokens=${data.usage?.completion_tokens_details?.reasoning_tokens ?? "n/a"}, `
+      + `budget=${body.max_completion_tokens}).`;
     throw empty;
   }
   return content;

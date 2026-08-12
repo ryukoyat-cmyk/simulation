@@ -4,3 +4,10 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+# index.html이 app.js를 버전 없이 참조하므로, 재검증을 강제하지 않으면
+# 브라우저가 예전 번들을 계속 써서 배포한 수정이 반영되지 않습니다.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

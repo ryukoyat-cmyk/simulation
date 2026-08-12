@@ -49,7 +49,11 @@ Netlify 배포 설정은 `netlify.toml`에 있습니다.
 Netlify 사이트의 환경변수에 다음 값을 등록해야 합니다.
 
 - `OPENAI_API_KEY`: OpenAI API 키
-- `OPENAI_MODEL`: 사용할 모델 이름. 기본값은 `gpt-4o-mini`
+- `OPENAI_MODEL`: 사용할 모델 이름. 기본값은 `gpt-4.1`
+- `OPENAI_CHAT_MODEL`: 학부모 대사 전용 모델. 지정하면 `OPENAI_MODEL`보다 우선합니다
+- `OPENAI_PRIMARY_EVAL_MODEL`: 평가 모델. 기본값은 `gpt-4.1-mini`
+- `OPENAI_TIMEOUT_MS`: AI 요청 제한 시간(ms). 기본값은 25000
+- `OPENAI_EVAL_TIMEOUT_MS`: 평가 요청 제한 시간(ms). 기본값은 20000
 - `OPENAI_TTS_MODEL`: 음성 합성 모델. 기본값은 `gpt-4o-mini-tts`
 - `OPENAI_TTS_VOICE`: 학부모 음색. 기본값은 `coral`
 - `SUPABASE_URL`: Supabase 프로젝트 URL
