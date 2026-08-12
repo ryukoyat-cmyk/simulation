@@ -557,6 +557,14 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+.speaker-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: #2d6f7f;
+}
+
 .msg-parent {
   align-self: flex-start;
   background: #fff;
@@ -567,6 +575,10 @@ button:disabled {
   align-self: flex-end;
   color: #fff;
   background: #2d6f7f;
+}
+
+.msg-teacher .speaker-label {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .msg-system {
