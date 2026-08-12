@@ -1,4 +1,4 @@
-import { createWithFallback, json, readJson, saveToSupabase } from "./_shared.js";
+import { createWithFallback, errorResponse, json, readJson, saveToSupabase } from "./_shared.js";
 
 const criteria = [
   ["요구 파악", "학부모의 핵심 요구와 쟁점을 경청하고 확인한다."], ["사실 확인", "추측 전에 필요한 사실관계를 질문하고 확인한다."], ["공감적 표현", "감정을 인정하되 성급히 동의하지 않는다."], ["명료한 설명", "상황·판단·가능한 조치를 이해하기 쉽게 설명한다."],
@@ -35,7 +35,7 @@ export default async (req) => {
     evaluation.applicableCount = applicable.length;
     if (body.sessionId) await saveToSupabase("simulation_evaluations", { session_id: body.sessionId, parent_type: body.parentType, situation: body.situation, score: evaluation.score, summary: evaluation.summary, strengths: evaluation.strengths, improvements: evaluation.improvements, conversation: { messages: body.messages, teacherType: body.teacherType, schoolLevel: body.schoolLevel, situationContext: body.situationContext || null, criteria: evaluation.criteria, overallFeedback: evaluation.overallFeedback } });
     return json(evaluation);
-  } catch (error) { console.error(error); return json({ error: error.message || "Evaluation failed" }, 500); }
+  } catch (error) { return errorResponse(error, "평가를 완료하지 못했습니다. 대화 기록은 그대로 남아 있으니 잠시 후 다시 시도해 주세요."); }
 };
 function normalizeCriteria(items) { const byName = new Map((Array.isArray(items) ? items : []).filter((item) => names.includes(item?.name)).map((item) => [item.name, item])); return names.map((name) => { const item = byName.get(name); return { name, score: Math.max(1, Math.min(4, Number(item?.score) || 1)), applicable: Boolean(item?.applicable), evidence: String(item?.evidence || "대화에서 이 요소에 관한 구체적 수행 근거가 확인되지 않았습니다.") }; }); }
 export const config = { path: "/api/evaluate", method: ["POST"] };

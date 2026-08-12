@@ -1,4 +1,4 @@
-import { createWithFallback, json, readJson, saveToSupabase } from "./_shared.js";
+import { createWithFallback, errorResponse, json, readJson, saveToSupabase } from "./_shared.js";
 
 const metCriteriaEnum = [
   "요구 파악",
@@ -150,8 +150,7 @@ ${body.system}
 
     return json({ text, ended, metCriteria });
   } catch (error) {
-    console.error(error);
-    return json({ error: error.message || "Chat failed" }, 500);
+    return errorResponse(error, "학부모 응답을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
 };
 

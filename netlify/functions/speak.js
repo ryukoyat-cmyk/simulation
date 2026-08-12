@@ -1,4 +1,4 @@
-import { getEnv, json, readJson, toUserFacingError } from "./_shared.js";
+import { describeNetworkError, errorResponse, getEnv, json, readJson, toUserFacingError } from "./_shared.js";
 
 const MAX_INPUT_CHARS = 800;
 const FALLBACK_VOICE = "alloy";
@@ -36,17 +36,27 @@ export default async (req) => {
     if (!result.ok) return json({ error: toUserFacingError(result.status, result.error).message }, result.status || 502);
     return json({ audio: result.audio, mime: "audio/mpeg" });
   } catch (error) {
-    console.error(error);
-    return json({ error: error.message || "Speech synthesis failed" }, 500);
+    return errorResponse(error, "학부모 음성을 합성하지 못했습니다.");
   }
 };
 
 async function requestSpeech({ apiKey, model, voice, text, instructions }) {
-  const res = await fetch("https://api.openai.com/v1/audio/speech", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, voice, input: text, instructions, response_format: "mp3" })
-  });
+  const timeoutMs = Number(getEnv("OPENAI_TIMEOUT_MS")) || 25000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, voice, input: text, instructions, response_format: "mp3" }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    throw describeNetworkError(error, "음성 합성 서비스", timeoutMs);
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const detail = await res.text();
