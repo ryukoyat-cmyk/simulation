@@ -65,15 +65,17 @@ export default async (req) => {
     }));
 
     if (isInitial) {
-      input.push({
-        role: "user",
-        content: `[시스템 진행 신호] 지금부터 대화를 시작합니다. 이 신호는 교사 발화가 아닙니다.
-선택된 학부모 유형(${parentType})의 말투와 감정 강도로 첫 민원 발화를 하세요.
-반드시 1인칭 학부모 발화로 시작하세요. 예: "선생님, 저는 금쪽이 학부모입니다.", "선생님, 금쪽이 일 때문에 연락드렸습니다."
-"학부모는", "학부모가", "금쪽이는 ... 했습니다"처럼 상황을 해설하거나 요약하지 마세요.
-반드시 아래 민원 상황의 구체 단어를 1개 이상 포함해 내가 직접 들은 내용, 걱정 또는 요구를 말하세요.
-민원 상황: ${situation}`
-      });
+      const text = buildInitialParentText(parentType, situation);
+      if (body.sessionId) {
+        await saveToSupabase("simulation_messages", {
+          session_id: body.sessionId,
+          parent_type: parentType || null,
+          situation: situation || null,
+          role: "assistant",
+          content: text
+        });
+      }
+      return json({ text, ended: false, metCriteria: [] });
     }
 
     const system = `
@@ -144,3 +146,29 @@ export const config = {
   path: "/api/chat",
   method: ["POST"]
 };
+
+function buildInitialParentText(parentType, situation) {
+  const topic = cleanSituation(situation);
+  const base = topic || "금쪽이와 관련해 학교에서 있었던 일을 확인하고 싶어 연락드렸습니다.";
+  if (parentType === "걱정형") {
+    return `선생님, 저는 금쪽이 학부모입니다. ${base} 금쪽이가 집에 와서 많이 신경 쓰는 것 같아 걱정돼서요. 학교에서 실제로 어떤 일이 있었는지, 그리고 아이 상태를 어떻게 살펴봐 주실 수 있는지 확인하고 싶습니다.`;
+  }
+  if (parentType === "회피형") {
+    return `선생님, 저는 금쪽이 학부모입니다. ${base} 예전에도 비슷한 이야기를 했을 때 명확히 정리되지 않았던 기억이 있어서 조금 조심스럽습니다. 이번에는 확인된 내용과 앞으로의 절차를 분명히 들을 수 있을까요?`;
+  }
+  if (parentType === "요구형") {
+    return `선생님, 저는 금쪽이 학부모입니다. ${base} 이 사안에 대해 학교가 확인한 사실, 교사가 대응할 수 있는 범위, 그리고 공식적인 처리 절차를 구체적으로 안내해 주세요. 언제까지 회신받을 수 있는지도 알고 싶습니다.`;
+  }
+  if (parentType === "압박형") {
+    return `선생님, 저는 금쪽이 학부모입니다. ${base} 이 부분은 그냥 넘어가기 어렵습니다. 지금 확인된 내용이 무엇인지, 누가 어떻게 확인할 건지, 언제까지 답을 주실 건지 바로 말씀해 주세요.`;
+  }
+  return `선생님, 저는 금쪽이 학부모입니다. ${base} 우선 학교에서 확인된 내용이 있는지 알고 싶습니다. 가능하면 사실관계와 앞으로의 확인 절차를 함께 정리해 주시면 좋겠습니다.`;
+}
+
+function cleanSituation(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^학부모는\s*/, "")
+    .trim()
+    .slice(0, 260);
+}
