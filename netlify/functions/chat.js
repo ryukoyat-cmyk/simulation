@@ -71,7 +71,7 @@ export default async (req) => {
     }));
 
     if (isInitial) {
-      const text = await createInitialParentText({
+      const { text, degraded } = await createInitialParentText({
         parentKey,
         parentType,
         situation,
@@ -88,7 +88,7 @@ export default async (req) => {
           content: text
         });
       }
-      return json({ text, ended: false, metCriteria: [] });
+      return json({ text, ended: false, metCriteria: [], degraded });
     }
 
     const system = `
@@ -177,7 +177,7 @@ const openingFormat = {
 // 첫 발화는 화면에 표시되는 동시에 TTS로 낭독됩니다.
 // 상황 서술문을 그대로 읽으면 대사와 지문이 섞여 들리므로, 학부모 자신의 말로 다시 말하게 합니다.
 async function createInitialParentText({ parentKey, parentType, situation, situationContext, teacherType, schoolLevel }) {
-  const fallback = buildInitialParentText(parentKey, parentType, situation);
+  const fallback = { text: buildInitialParentText(parentKey, parentType), degraded: true };
   if (!situation) return fallback;
 
   const system = `
@@ -213,49 +213,29 @@ ${parentProfiles[parentKey] || parentProfiles[parentType] || "선택된 학부�
       responseFormat: openingFormat
     }, "gpt-4.1-mini");
     const text = String(JSON.parse(raw).text || "").trim();
-    return text || fallback;
+    return text ? { text, degraded: false } : fallback;
   } catch (error) {
     console.warn("Initial parent utterance generation failed; using template.", error.message);
     return fallback;
   }
 }
 
-function buildInitialParentText(parentKey, parentType, situation) {
-  const topic = cleanSituation(situation);
-  const base = topic || "금쪽이와 관련해 학교에서 있었던 일을 확인하고 싶어 연락드렸습니다.";
+// 생성이 실패했을 때만 쓰는 대사입니다.
+// 상황 설명문은 3인칭 서술이라 그대로 끼워 넣으면 지문을 낭독하는 것처럼 들리므로,
+// 여기서는 상황을 인용하지 않고 학부모가 실제로 꺼낼 법한 말로만 시작합니다.
+// 구체적인 상황은 화면 오른쪽 '민원 상황' 패널에 그대로 표시됩니다.
+function buildInitialParentText(parentKey, parentType) {
   if (parentKey === "anxious" || parentType === "걱정형") {
-    return `선생님, 저는 금쪽이 학부모입니다. ${base} 금쪽이가 집에 와서 많이 신경 쓰는 것 같아 걱정돼서요. 학교에서 실제로 어떤 일이 있었는지, 그리고 아이 상태를 어떻게 살펴봐 주실 수 있는지 확인하고 싶습니다.`;
+    return "선생님, 금쪽이 엄마입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요.";
   }
   if (parentKey === "avoidant" || parentType === "회피형") {
-    return `선생님, 저는 금쪽이 학부모입니다. ${base} 예전에도 비슷한 이야기를 했을 때 명확히 정리되지 않았던 기억이 있어서 조금 조심스럽습니다. 이번에는 확인된 내용과 앞으로의 절차를 분명히 들을 수 있을까요?`;
+    return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다.";
   }
   if (parentKey === "demanding" || parentType === "요구형") {
-    return `선생님, 저는 금쪽이 학부모입니다. ${base} 이 사안에 대해 학교가 확인한 사실, 교사가 대응할 수 있는 범위, 그리고 공식적인 처리 절차를 구체적으로 안내해 주세요. 언제까지 회신받을 수 있는지도 알고 싶습니다.`;
+    return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다.";
   }
   if (parentKey === "pressure" || parentType === "압박형") {
-    return `선생님, 저는 금쪽이 학부모입니다. ${base} 이 부분은 그냥 넘어가기 어렵습니다. 지금 확인된 내용이 무엇인지, 누가 어떻게 확인할 건지, 언제까지 답을 주실 건지 바로 말씀해 주세요.`;
+    return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요.";
   }
-  return `선생님, 저는 금쪽이 학부모입니다. ${base} 우선 학교에서 확인된 내용이 있는지 알고 싶습니다. 가능하면 사실관계와 앞으로의 확인 절차를 함께 정리해 주시면 좋겠습니다.`;
-}
-
-function cleanSituation(value) {
-  const sentences = String(value || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .match(/[^.!?。！？]+[.!?。！？]?/g) || [];
-  const eventSentences = sentences
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence && !/^학부모는/.test(sentence));
-  const picked = (eventSentences[0] || sentences[0] || "")
-    .replace(/^학부모는\s*/, "")
-    .trim();
-  // 낭독 시 말이 중간에 끊기지 않도록 글자 수가 아닌 문장 경계로 자릅니다.
-  if (picked.length <= 180) return picked;
-  const clauses = picked.match(/[^,·]+[,·]?/g) || [picked];
-  let trimmed = "";
-  for (const clause of clauses) {
-    if ((trimmed + clause).trim().length > 180) break;
-    trimmed += clause;
-  }
-  return (trimmed.trim() || picked.slice(0, 180)).replace(/[,·]$/, "");
+  return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다.";
 }

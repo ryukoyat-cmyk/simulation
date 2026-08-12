@@ -1,4 +1,4 @@
-import { getEnv, json, readJson } from "./_shared.js";
+import { getEnv, json, readJson, toUserFacingError } from "./_shared.js";
 
 const MAX_INPUT_CHARS = 800;
 const FALLBACK_VOICE = "alloy";
@@ -33,7 +33,7 @@ export default async (req) => {
     if (!result.ok && result.status === 400 && voice !== FALLBACK_VOICE) {
       result = await requestSpeech({ apiKey, model, voice: FALLBACK_VOICE, text, instructions });
     }
-    if (!result.ok) return json({ error: result.error || "Speech synthesis failed" }, result.status || 502);
+    if (!result.ok) return json({ error: toUserFacingError(result.status, result.error).message }, result.status || 502);
     return json({ audio: result.audio, mime: "audio/mpeg" });
   } catch (error) {
     console.error(error);

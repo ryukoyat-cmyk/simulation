@@ -52,7 +52,7 @@ export async function createOpenAIResponse({ system, input, maxOutputTokens = 60
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.error?.message || `OpenAI request failed with ${res.status}`);
+    throw toUserFacingError(res.status, data.error?.message);
   }
 
   const content = data.choices?.[0]?.message?.content?.trim() || "";
@@ -60,10 +60,31 @@ export async function createOpenAIResponse({ system, input, maxOutputTokens = 60
   return content;
 }
 
+// 업스트림 오류 원문은 서버 로그에만 남기고, 화면에는 조치 가능한 안내만 내보냅니다.
+export function toUserFacingError(status, detail) {
+  const raw = detail || `OpenAI request failed with ${status}`;
+  if (status === 401 || status === 403) {
+    console.error("OpenAI authentication rejected. Check the OPENAI_API_KEY site environment variable:", raw);
+    const error = new Error("AI 서비스 인증에 실패했습니다. 사이트 환경변수의 OPENAI_API_KEY를 확인해 주세요.");
+    error.code = "auth";
+    return error;
+  }
+  if (status === 429) {
+    console.warn("OpenAI rate limit or quota reached:", raw);
+    const error = new Error("AI 서비스 사용량 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.");
+    error.code = "rate";
+    return error;
+  }
+  console.error(`OpenAI request failed with ${status}:`, raw);
+  return new Error(raw);
+}
+
 export async function createWithFallback(options, fallbackModel) {
   try {
     return await createOpenAIResponse(options);
   } catch (error) {
+    // 키가 거부된 경우에는 모델을 바꿔도 결과가 같으므로 재시도하지 않습니다.
+    if (error.code === "auth") throw error;
     if (!fallbackModel || options.model === fallbackModel) throw error;
     console.warn(`Primary model failed; retrying with ${fallbackModel}.`, error.message);
     return createOpenAIResponse({ ...options, model: fallbackModel, reasoningEffort: undefined });
