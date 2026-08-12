@@ -71,7 +71,14 @@ export default async (req) => {
     }));
 
     if (isInitial) {
-      const text = buildInitialParentText(parentKey, parentType, situation);
+      const text = await createInitialParentText({
+        parentKey,
+        parentType,
+        situation,
+        situationContext,
+        teacherType: String(body.teacherType || ""),
+        schoolLevel: String(body.schoolLevel || "")
+      });
       if (body.sessionId) {
         await saveToSupabase("simulation_messages", {
           session_id: body.sessionId,
@@ -153,6 +160,66 @@ export const config = {
   method: ["POST"]
 };
 
+const openingFormat = {
+  type: "json_schema",
+  json_schema: {
+    name: "parent_opening_line",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: { text: { type: "string" } },
+      required: ["text"]
+    }
+  }
+};
+
+// 첫 발화는 화면에 표시되는 동시에 TTS로 낭독됩니다.
+// 상황 서술문을 그대로 읽으면 대사와 지문이 섞여 들리므로, 학부모 자신의 말로 다시 말하게 합니다.
+async function createInitialParentText({ parentKey, parentType, situation, situationContext, teacherType, schoolLevel }) {
+  const fallback = buildInitialParentText(parentKey, parentType, situation);
+  if (!situation) return fallback;
+
+  const system = `
+당신은 학부모 민원 대응 연습의 AI 학부모입니다. 지금은 교사에게 처음 연락해 민원을 꺼내는 순간입니다.
+
+[상황]
+교원 유형: ${teacherType || "미선택"}
+학교급: ${schoolLevel || "미선택"}
+민원 상황: ${situation}
+상세 맥락: ${situationContext || situation}
+
+[학부모 유형: ${parentType}]
+${parentProfiles[parentKey] || parentProfiles[parentType] || "선택된 학부모 유형의 설명을 따르세요."}
+
+[낭독 제약]
+- 이 발화는 음성으로 소리 내어 재생됩니다. 귀로 들었을 때 자연스러워야 합니다.
+- 위 상황 문장을 그대로 옮겨 적지 말고, 학부모가 직접 겪은 일처럼 자기 말로 바꿔 말하세요.
+- "학부모는", "학부모가", "상황은", "교사는"처럼 제3자 해설이나 시뮬레이션 설명을 쓰지 마세요.
+- 교사에게 직접 말하는 1인칭 구어체로만 씁니다. 자녀는 "금쪽이"로 부릅니다.
+- 2~3문장으로 짧게 말합니다. 한 문장이 너무 길어지지 않게 합니다.
+- 괄호, 따옴표, 목록 기호, 이모지, 영문 약어, 항목 나열은 쓰지 마세요.
+- 첫 문장에서 선택된 학부모 유형(${parentType})의 감정과 말투가 분명히 드러나야 합니다.
+- 욕설, 협박, 혐오 표현은 쓰지 않습니다.
+- 상황에 없는 새 사건이나 쟁점을 만들지 마세요.
+`.trim();
+
+  try {
+    const raw = await createWithFallback({
+      model: process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini",
+      system,
+      input: "지금 교사에게 건네는 첫 민원 발화를 작성하세요.",
+      maxOutputTokens: 400,
+      responseFormat: openingFormat
+    }, "gpt-4.1-mini");
+    const text = String(JSON.parse(raw).text || "").trim();
+    return text || fallback;
+  } catch (error) {
+    console.warn("Initial parent utterance generation failed; using template.", error.message);
+    return fallback;
+  }
+}
+
 function buildInitialParentText(parentKey, parentType, situation) {
   const topic = cleanSituation(situation);
   const base = topic || "금쪽이와 관련해 학교에서 있었던 일을 확인하고 싶어 연락드렸습니다.";
@@ -179,8 +246,16 @@ function cleanSituation(value) {
   const eventSentences = sentences
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence && !/^학부모는/.test(sentence));
-  return (eventSentences[0] || sentences[0] || "")
+  const picked = (eventSentences[0] || sentences[0] || "")
     .replace(/^학부모는\s*/, "")
-    .trim()
-    .slice(0, 180);
+    .trim();
+  // 낭독 시 말이 중간에 끊기지 않도록 글자 수가 아닌 문장 경계로 자릅니다.
+  if (picked.length <= 180) return picked;
+  const clauses = picked.match(/[^,·]+[,·]?/g) || [picked];
+  let trimmed = "";
+  for (const clause of clauses) {
+    if ((trimmed + clause).trim().length > 180) break;
+    trimmed += clause;
+  }
+  return (trimmed.trim() || picked.slice(0, 180)).replace(/[,·]$/, "");
 }
