@@ -28,8 +28,9 @@ export async function createOpenAIResponse({ system, input, maxOutputTokens = 60
     throw new Error("OPENAI_API_KEY is not configured.");
   }
 
+  const selectedModel = model || getEnv("OPENAI_MODEL") || "gpt-5-mini";
   const body = {
-    model: model || getEnv("OPENAI_MODEL") || "gpt-5-mini",
+    model: selectedModel,
     messages: [
       { role: "system", content: system },
       ...normalizeMessages(input)
@@ -38,7 +39,7 @@ export async function createOpenAIResponse({ system, input, maxOutputTokens = 60
   };
 
   if (responseFormat) body.response_format = responseFormat;
-  if (reasoningEffort) body.reasoning_effort = reasoningEffort;
+  if (/^gpt-5/i.test(selectedModel) && reasoningEffort) body.reasoning_effort = reasoningEffort;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -105,4 +106,3 @@ function normalizeMessages(input) {
     content: String(message.content || "")
   }));
 }
-
