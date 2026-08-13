@@ -127,6 +127,8 @@ async function requestTurnFeedback(teacherText, history) {
 function setDraft(value) { S.draft = value; const input = $("teacherInput"); if (input) input.value = value; }
 function joinDraft(...parts) { return parts.map((part) => String(part || "").trim()).filter(Boolean).join(" ").trim(); }
 
+// 한 인스턴스를 수십 번 재사용하면 웹뷰에서 이전 세션의 결과가 새 세션에 섞여 나오는 일이 있습니다.
+// 그 증상은 지금 고치는 중복과 구분이 되지 않으므로, 세션마다 새로 만들어 아예 가능성을 없앱니다.
 function ensureRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return null;
@@ -142,35 +144,91 @@ function ensureRecognition() {
 // 같은 확정 결과가 다시 전달될 때마다 문장이 한 번씩 더 쌓입니다.
 // 그래서 resultIndex를 쓰지 않고 매번 목록 전체로 문장을 다시 만듭니다.
 // 같은 이벤트가 몇 번 오든 결과가 같으므로 중복이 생길 수 없습니다.
+// event.results의 항목들이 서로 다른 구간인지(데스크톱에서 알려진 형태),
+// 앞말을 통째로 다시 읊는 재진술인지(안드로이드 웹뷰)는 엔진마다 다르고 한 세션 안에서 섞이기도 합니다.
+// 명세는 확정 결과들이 서로 겹치지 않는다고 보장한 적이 없습니다.
+// 그래서 왼쪽부터 접으면서 두 모양을 함께 처리하되, 재진술이 얼마나 뚜렷했는지(span·hits)를
+// 함께 돌려줘 이 결과를 믿을지 호출한 쪽이 정하게 합니다.
+function foldChunks(chunks) {
+  let acc = [], span = 0, hits = 0, restated = false;
+  for (const raw of chunks) {
+    const next = words(raw);
+    if (!next.length) continue;
+    if (!acc.length) { acc = next; continue; }
+    // 지금까지의 말을 그대로 앞에 달고 뒤를 늘린 조각이면 통째로 갈아끼웁니다.
+    if (next.length > acc.length && headMatch(next, acc)) { span = Math.max(span, acc.length); hits += 1; acc = next; restated = true; continue; }
+    // 이미 끝에 들어 있는 조각이 또 오면 버립니다.
+    if (tailMatch(acc, next)) { restated = false; continue; }
+    // 이어지는 조각은 겹친 꼬리만 잘라 붙입니다. 한 어절만 겹치는 것은 "네 네"처럼
+    // 실제로 반복한 말일 수 있어, 직전 조각이 재진술이었을 때만 자릅니다.
+    const cut = overlapWords(acc, next);
+    acc = acc.concat(next.slice(cut >= RESTATE_MIN_WORDS || (cut === 1 && restated) ? cut : 0));
+    restated = false;
+  }
+  return { text: acc.join(" "), span, hits };
+}
+
+// 증거가 약하면 접은 결과를 쓰지 않고 예전처럼 그냥 이어 붙입니다.
+// 지우는 것이 남기는 것보다 나쁩니다. 중복은 눈에 보여 고칠 수 있지만
+// 사라진 말은 보이지 않고 평가 기록까지 조용히 훼손합니다.
+const trustFold = (fold) => fold.span >= RESTATE_MIN_WORDS || fold.hits >= RESTATE_MIN_HITS;
+
 function readTranscript(event) {
-  let final = "", interim = "";
+  const finals = [], interims = [];
   for (let i = 0; i < event.results.length; i += 1) {
     const result = event.results[i], chunk = result[0]?.transcript || "";
     if (!chunk.trim()) continue;
-    if (result.isFinal) final = joinDraft(final, chunk); else interim = joinDraft(interim, chunk);
+    (result.isFinal ? finals : interims).push(chunk);
   }
-  return { final, interim };
+  const folded = foldChunks(finals);
+  const restating = trustFold(folded);
+  const final = restating ? folded.text : joinDraft(...finals);
+  const interim = restating ? foldChunks(interims).text : joinDraft(...interims);
+  // 미확정 조각이 확정분까지 다시 읊는 엔진이 있어, 화면에 뿌릴 문장은 한 번 더 접습니다.
+  // 말하는 도중에 화면이 중복돼 보이던 것도 여기서 잡힙니다.
+  const spoken = restating ? foldChunks([final, interim]).text : joinDraft(final, interim);
+  return { final, spoken };
+}
+
+// 브라우저가 결과를 어떤 모양으로 주는지는 기기마다 달라 이 환경에서는 실측할 수 없습니다.
+// 주소 뒤에 ?voicedebug=1 을 붙이면 실제 방출 형태가 화면에 그대로 뜹니다.
+// 중복이 다시 보고되면 이 화면을 캡처해 주시면 추측 없이 원인을 짚을 수 있습니다.
+const VOICE_DEBUG = /[?&]voicedebug=1/.test(location.search);
+
+function paintVoiceDebug(event) {
+  if (!VOICE_DEBUG) return;
+  let box = $("voiceDebug");
+  if (!box) { box = document.createElement("div"); box.id = "voiceDebug"; box.className = "voice-debug"; document.body.appendChild(box); }
+  const shape = [];
+  for (let i = 0; i < event.results.length; i += 1) shape.push(`${event.results[i].isFinal ? "F" : "i"} ${event.results[i][0]?.transcript || ""}`);
+  box.textContent = `resultIndex=${event.resultIndex} / ${event.results.length}개\n${shape.join("\n")}`;
 }
 
 function handleRecognitionResult(event) {
-  const { final, interim } = readTranscript(event);
-  sessionFinal = final; // 누적(+=)이 아니라 대입입니다. 이 한 줄이 중복을 막습니다.
-  if (final || interim) restartBurst = 0;
-  setDraft(joinDraft(committedText, newSpeech(joinDraft(sessionFinal, interim))));
+  paintVoiceDebug(event);
+  const { final, spoken } = readTranscript(event);
+  sessionFinal = final; // 누적(+=)이 아니라 대입입니다. 같은 이벤트가 다시 와도 결과가 같습니다.
+  if (spoken) restartBurst = 0;
+  setDraft(joinDraft(committedText, newSpeech(spoken)));
 }
 
 // 새 세션이 직전 세션에서 이미 확정한 말을 한 번 더 내보내는 일이 있습니다.
 // 본문 끝과 겹치는 만큼을 어절 단위로 잘라 냅니다.
+const RESTATE_MIN_WORDS = 2; // 재진술로 단정하려면 두 어절 이상이 그대로 되풀이돼야 합니다.
+const RESTATE_MIN_HITS = 2;  // 한 어절짜리 겹침도 한 세션에 두 번 이상이면 엔진 습관으로 봅니다.
+
+function words(text) { return String(text || "").trim().split(/\s+/).filter(Boolean); }
+const headMatch = (whole, head) => head.length <= whole.length && head.every((w, i) => w === whole[i]);
+const tailMatch = (whole, tail) => tail.length <= whole.length && tail.every((w, i) => w === whole[whole.length - tail.length + i]);
+function overlapWords(base, next) {
+  for (let n = Math.min(base.length, next.length); n >= 1; n -= 1) if (tailMatch(base, next.slice(0, n))) return n;
+  return 0;
+}
+
 function stripOverlap(base, addition) {
-  const tail = String(base || "").trim().split(/\s+/).filter(Boolean);
-  const next = String(addition || "").trim().split(/\s+/).filter(Boolean);
+  const tail = words(base), next = words(addition);
   if (!tail.length || !next.length) return next.join(" ");
-  for (let n = Math.min(tail.length, next.length); n >= 1; n -= 1) {
-    let same = true;
-    for (let i = 0; i < n; i += 1) if (tail[tail.length - n + i] !== next[i]) { same = false; break; }
-    if (same) return next.slice(n).join(" ");
-  }
-  return next.join(" ");
+  return next.slice(overlapWords(tail, next)).join(" ");
 }
 
 function newSpeech(heard) {
@@ -229,6 +287,9 @@ function handleRecognitionEnd() {
   starting = false;
   S.listening = false;
   commitSession();
+  // 세션을 닫은 뒤 늦게 도착하는 onresult가 방금 본문에 넘긴 말을 되살리지 못하게 무효화합니다.
+  sessionEpoch += 1;
+  recognition = null; // 다음 세션은 새 인스턴스로 엽니다.
   paintVoiceState();
   if (!S.recording) return; // 사용자가 멈췄습니다.
   if (!canListen() || document.hidden) { S.recording = false; paintVoiceState(); return; }
@@ -259,17 +320,20 @@ function stopRecording(keepTail = true) {
   S.recording = false;
   clearTimeout(restartTimer); restartTimer = null;
   restartBurst = 0;
-  if (!recognition) { commitSession(); paintVoiceState(); return; }
   if (keepTail) {
-    if (!S.listening && !starting) { commitSession(); paintVoiceState(); return; }
+    // 멈춘 뒤 도착하는 마지막 확정 결과까지 본문에 넣습니다(버튼으로 중지).
+    if (!recognition || (!S.listening && !starting)) { commitSession(); paintVoiceState(); return; }
     paintVoiceState();
     try { recognition.stop(); } catch (error) { S.listening = false; starting = false; commitSession(); paintVoiceState(); }
     return;
   }
+  // 남은 결과를 통째로 버립니다(전송·학부모 발화·화면 이탈).
+  // 본문 버퍼까지 비워야 합니다. 남겨 두면 다음 commitSession이 방금 전송해 비운 입력창에
+  // 예전 문장을 도로 써 넣습니다.
   sessionEpoch += 1; // 이 세션의 남은 이벤트를 전부 무효화합니다.
   S.listening = false; starting = false;
-  sessionFinal = ""; consumedFinal = ""; carryOver = false;
-  try { recognition.abort(); } catch (error) { /* 무시합니다. */ }
+  committedText = ""; sessionFinal = ""; consumedFinal = ""; carryOver = false;
+  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } recognition = null; }
   paintVoiceState();
 }
 
@@ -295,7 +359,7 @@ function stopVoice() {
   sessionEpoch += 1;
   S.listening = false; starting = false;
   committedText = ""; sessionFinal = ""; consumedFinal = ""; carryOver = false; restartBurst = 0;
-  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } }
+  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } recognition = null; }
   try { window.speechSynthesis?.cancel(); } catch (error) { /* 무시합니다. */ }
   if (parentAudio) { try { parentAudio.pause(); } catch (error) { /* 무시합니다. */ } }
 }
