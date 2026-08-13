@@ -15,19 +15,14 @@ const names = criteria.map(([name]) => name);
 // 평가는 서버리스 함수의 실행 제한 안에서 끝나야 합니다.
 // 예전에는 1차 평가와 2차 검토를 순서대로 호출했는데, 추론 모델 두 번을 이어 붙이면
 // 제한 시간을 넘겨 함수가 강제 종료되고 브라우저에는 JSON 대신 플랫폼 오류 페이지가 도착합니다.
-// 요소 채점과 서술 피드백은 서로를 기다릴 필요가 없으므로 둘로 쪼개 동시에 호출합니다.
-const criteriaFormat = {
-  type: "json_schema", json_schema: { name: "criteria_scores", strict: true,
+// 지금은 요소 채점과 서술 피드백을 한 스키마에 담아 한 번만 호출합니다.
+// 실패 지점이 하나로 줄고 호출 비용도 절반입니다.
+const responseFormat = {
+  type: "json_schema", json_schema: { name: "teacher_response_evaluation", strict: true,
     schema: { type: "object", additionalProperties: false, properties: {
+      summary: { type: "string" }, overallFeedback: { type: "string" }, strengths: { type: "array", items: { type: "string" } }, improvements: { type: "array", items: { type: "string" } },
       criteria: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string", enum: names }, score: { type: "integer", minimum: 1, maximum: 4 }, applicable: { type: "boolean" }, evidence: { type: "string" } }, required: ["name", "score", "applicable", "evidence"] } }
-    }, required: ["criteria"] }
-  }
-};
-const narrativeFormat = {
-  type: "json_schema", json_schema: { name: "evaluation_narrative", strict: true,
-    schema: { type: "object", additionalProperties: false, properties: {
-      summary: { type: "string" }, overallFeedback: { type: "string" }, strengths: { type: "array", items: { type: "string" } }, improvements: { type: "array", items: { type: "string" } }
-    }, required: ["summary", "overallFeedback", "strengths", "improvements"] }
+    }, required: ["summary", "overallFeedback", "strengths", "improvements", "criteria"] }
   }
 };
 
@@ -41,19 +36,9 @@ export default async (req) => {
     const system = `당신은 예비·현직교원의 학부모 민원 대응 연습을 평가하는 교육 전문가입니다. 반드시 JSON 스키마만 반환합니다.\n\n[평가 원칙]\n- 아래 14개 요소 각각을 대화의 실제 교사 발화에 근거해 1~4점으로 평가합니다.\n- 상황상 관찰할 기회가 없거나 해당하지 않는 요소만 applicable:false로 처리합니다. 그 경우에도 score는 1~4 정수로 채우되 총점 계산에서 제외됩니다.\n- 해당 없음은 편의상 주지 마세요. 대화에서 기대 가능한 요소인데 드러나지 않았다면 applicable:true, 1점으로 평가하세요.\n- evidence는 해당 점수의 구체적 대화 근거 또는 미흡 사유를 한 문장으로 씁니다.\n- 점수: 4=일관되고 적절한 수행, 3=대체로 적절하나 일부 불명확, 2=부분 인식·수행, 1=수행되지 않음 또는 부적절.\n- 강점·개선점은 2~4개, 종합 의견은 학습 피드백으로 간결히 씁니다.\n\n[14개 요소]\n${criteria.map(([name, detail], i) => `${i + 1}. ${name}: ${detail}`).join("\n")}`;
     const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: ${body.schoolLevel || "미선택"}\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}\n대화 기록:\n${convo}`;
     const model = getEnv("OPENAI_PRIMARY_EVAL_MODEL") || "gpt-4.1-mini";
-    const [scored, narrative] = await Promise.all([
-      createWithFallback({ model, reasoningEffort: "low", system, input: context, maxOutputTokens: 2000, responseFormat: criteriaFormat, timeoutMs: evalTimeout() }, "gpt-4.1-mini")
-        .then((raw) => JSON.parse(raw)),
-      createWithFallback({ model, reasoningEffort: "low", system: `${system}\n\n지금은 점수표가 아니라 학습 피드백 서술만 작성합니다. 요소별 점수는 매기지 마세요.`, input: context, maxOutputTokens: 800, responseFormat: narrativeFormat, timeoutMs: evalTimeout() }, "gpt-4.1-mini")
-        .then((raw) => JSON.parse(raw))
-        // 서술 피드백이 실패해도 점수표는 그대로 보여 줍니다. 없는 내용을 지어내지 않고 비었음을 밝힙니다.
-        .catch((error) => { console.error("narrative pass failed:", error.detail || error.message); return null; })
-    ]);
-
-    const evaluation = narrative
-      ? { ...narrative }
-      : { summary: "요소별 점수는 정상적으로 산출되었습니다.", overallFeedback: "종합 의견을 생성하지 못했습니다. 아래 요소별 근거를 확인해 주세요.", strengths: [], improvements: [], narrativeDegraded: true };
-    evaluation.criteria = normalizeCriteria(scored.criteria);
+    const raw = await createWithFallback({ model, reasoningEffort: "low", system, input: context, maxOutputTokens: 2600, responseFormat, timeoutMs: evalTimeout() }, "gpt-4.1-mini");
+    const evaluation = JSON.parse(raw);
+    evaluation.criteria = normalizeCriteria(evaluation.criteria);
     const applicable = evaluation.criteria.filter((item) => item.applicable);
     evaluation.score = applicable.length ? Math.round((applicable.reduce((sum, item) => sum + item.score, 0) / applicable.length) * 14 * 10) / 10 : 0;
     evaluation.applicableCount = applicable.length;

@@ -590,6 +590,12 @@ button:disabled {
   background: #e3edf3;
 }
 
+.replay-button.playing {
+  border-color: #c45762;
+  background: #fdeced;
+  color: #a8323f;
+}
+
 .msg-teacher {
   align-self: flex-end;
   color: #fff;
@@ -884,11 +890,13 @@ button:disabled {
 .send-button, .voice-button { height: 56px; min-width: 92px; padding: 0 16px; border-radius: 16px; color: #fff; font-weight: 800; cursor: pointer; }
 .voice-button { background: #315e77; }
 .voice-button.listening { background: #c45762; animation: voicePulse 1.1s ease-in-out infinite; }
-/* 음성 모드는 켜져 있지만 학부모 발화나 응답 대기로 마이크가 잠시 닫힌 상태입니다.
-   버튼이 꺼진 것처럼 보이면 사용자가 다시 눌러 모드를 꺼 버리므로 켜짐을 유지해 보여 줍니다. */
-.voice-button.standby { background: #4d7f96; }
 .voice-button:disabled { opacity: .55; cursor: not-allowed; }
 @keyframes voicePulse { 50% { transform: scale(.97); } }
+/* 인앱 브라우저는 alert을 억제하기도 해서, 실패를 화면 안에서 직접 보여 줍니다. */
+.inline-error { display: grid; gap: 6px; justify-items: start; width: min(920px, 100%); margin: 0 auto 14px; padding: 14px 16px; border: 1px solid rgba(196, 87, 98, .35); border-radius: 16px; background: #fdeced; color: #8f2b37; line-height: 1.55; }
+.inline-error strong { font-size: 1rem; }
+.inline-error-note { color: #a8646c; font-size: .86rem; }
+.inline-error button { margin-top: 6px; }
 .feedback-idle { color: var(--muted); }
 .feedback-message { margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: #f4f8fb; line-height: 1.55; }
 .feedback-line { margin: 6px 0; font-size: .9rem; }
@@ -944,25 +952,29 @@ button:disabled {
   box-shadow: 0 20px 40px rgba(31,73,100,.16);
 }
 
+/* 카드 이미지는 원본이 모두 세로형입니다. 고정 높이를 쓰면 박스가 가로로 넓어져
+   인물의 머리가 잘리거나(cover) 좌우가 텅 비게(contain) 됩니다.
+   비율로 두면 열 폭이 바뀌어도 잘리는 정도가 일정하게 유지됩니다. */
 .choice-image {
   display: block;
-  height: 250px;
+  height: auto;
+  aspect-ratio: 3 / 4;
   overflow: hidden;
   border-radius: 19px;
   background: linear-gradient(145deg, #f5fbfb, #eef4ff);
 }
-
-.school-choice-grid .choice-image { height: 290px; }
 
 .choice-image img {
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
-  object-position: center 25%;
+  object-position: center 15%;
 }
 
-.school-choice-grid .choice-image img { object-position: center 15%; }
+/* 학교급 원본은 398 × 1075로 특히 길어 세로로 많이 잘립니다.
+   머리 위 여백부터 상체까지가 보이도록 위쪽에서 잘라 냅니다. */
+.school-choice-grid .choice-image img { object-position: center 12%; }
 .image-choice strong { display:block; margin-top: 14px; color: var(--primary); font-size: 1.35rem; }
 .image-choice p { min-height: 2.9em; margin: 7px 8px 0; color: var(--muted); font-size: .9rem; line-height: 1.55; }
 
@@ -1023,8 +1035,10 @@ button:disabled {
 .evaluation-error { margin:18px 0 0; padding:14px 16px; border-radius:14px; color:#9f3e3e; background:#fff1f0; line-height:1.6; }
 
 @media (max-width: 720px) {
-  .image-choice-grid:not(.parent-choice-grid), .school-choice-grid, .domain-grid, .feedback-columns { grid-template-columns:1fr; }
-  .choice-image, .school-choice-grid .choice-image { height:260px; }
+  /* 한 줄에 하나씩 두면 카드 폭이 화면 전체가 되어 세로 이미지가 지나치게 길어집니다.
+     두 칸으로 두면 이미지 크기와 스크롤 길이가 모두 알맞습니다. */
+  .image-choice-grid:not(.parent-choice-grid), .school-choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .domain-grid, .feedback-columns { grid-template-columns:1fr; }
   .result-hero, .result-section { padding:26px 20px; border-radius:21px; }
   .result-score strong { font-size:3.8rem; }
 }
@@ -1497,6 +1511,12 @@ textarea:focus-visible {
   justify-content: center;
 }
 
+/* 선택 화면은 카드가 주인공이라 본문 폭보다 넓게 씁니다.
+   .page-center의 1240px 상한을 그대로 두면 그리드만 넓혀도 카드가 커지지 않습니다. */
+.page-center.selection-page {
+  width: min(1400px, 100%);
+}
+
 .step-index {
   margin: 0 0 -12px;
   color: #168c83;
@@ -1615,11 +1635,13 @@ textarea:focus-visible {
   }
 }
 
-/* Parent persona selector: five cards must remain visible in one horizontal row. */
+/* 학부모 페르소나 선택: 데스크톱에서는 다섯 장을 한 줄에 두고 비교합니다.
+   이미지 박스는 원본(394 × 700)과 같은 세로 비율로 두어야 잘림도 여백도 없이 꽉 찹니다.
+   예전에는 고정 높이라 박스가 가로로 넓었고, object-fit:contain이 카드 폭의 40% 남짓만 채웠습니다. */
 .image-choice-grid.parent-choice-grid {
-  width: min(1180px, 100%);
+  width: min(1400px, 100%);
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: clamp(7px, 1vw, 13px);
+  gap: clamp(8px, 1vw, 16px);
 }
 
 .parent-choice-grid .image-choice.parent-choice {
@@ -1628,8 +1650,14 @@ textarea:focus-visible {
 }
 
 .parent-choice-grid .parent-choice .choice-image {
-  height: clamp(92px, 13vw, 158px);
+  height: auto;
+  aspect-ratio: 394 / 700;
   border-radius: 13px;
+}
+
+.parent-choice-grid .parent-choice .choice-image img {
+  object-fit: cover;
+  object-position: center top;
 }
 
 .parent-choice-grid .parent-choice strong {
@@ -1645,13 +1673,15 @@ textarea:focus-visible {
 }
 
 @media (max-width: 720px) {
+  /* 휴대폰에서 다섯 장을 한 줄에 넣으면 카드 하나가 70px 남짓이라 인물을 알아볼 수 없습니다.
+     두 줄로 감아 이미지를 크게 보여 줍니다. */
   .image-choice-grid.parent-choice-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 5px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
-  .parent-choice-grid .image-choice.parent-choice { padding: 5px 4px 8px; border-radius: 12px; }
-  .parent-choice-grid .parent-choice .choice-image { height: clamp(66px, 18vw, 102px); border-radius: 9px; }
-  .parent-choice-grid .parent-choice strong { font-size: .7rem; }
-  .parent-choice-grid .parent-choice p { min-height: 0; font-size: .5rem; line-height: 1.3; }
+  .parent-choice-grid .image-choice.parent-choice { padding: 8px 8px 12px; border-radius: 16px; }
+  .parent-choice-grid .parent-choice .choice-image { height: auto; aspect-ratio: 394 / 700; border-radius: 12px; }
+  .parent-choice-grid .parent-choice strong { font-size: 1rem; }
+  .parent-choice-grid .parent-choice p { min-height: 0; font-size: .78rem; line-height: 1.45; }
 }
 
