@@ -288,13 +288,17 @@ function renderGuidePanel() {
   return `<section class="side-section guide-panel"><div class="box-label">응대 참고${toggle}</div>${body}</section>`;
 }
 
+// 요소 이름을 나열하는 대신, "이렇게 말해 보세요" 대사와 그 근거 문서를 가장 먼저 보여줍니다.
+// 대사는 참고자료 모듈(_response_guides.js)에서 가져온 것만 나오므로(서버가 guideId 없이는
+// suggestion을 비워 돌려줍니다), 여기 보이는 문장은 항상 출처가 있습니다.
 function renderTurnFeedback() {
   if (S.feedbackLoading) return `<p class="feedback-idle">방금 하신 말씀을 살펴보는 중입니다…</p>`;
   const fb = S.turnFeedback;
   const met = fb?.met?.length ? fb.met : S.feedback;
   const blocks = [];
-  if (met.length) blocks.push(`<p class="feedback-line"><span class="feedback-tag">드러난 요소</span>${met.map(esc).join(" · ")}</p>`);
   if (fb?.message) blocks.push(`<p class="feedback-message">${esc(fb.message)}</p>`);
+  if (fb?.suggestion) blocks.push(`<div class="feedback-suggestion"><strong>이렇게 말해 보세요</strong><p>"${esc(fb.suggestion)}"</p>${fb.citation ? `<span class="feedback-citation">근거: ${esc(fb.citation.title)} · ${esc(fb.citation.label)}</span>` : ""}</div>`);
+  if (met.length) blocks.push(`<p class="feedback-line"><span class="feedback-tag">드러난 요소</span>${met.map(esc).join(" · ")}</p>`);
   if (fb?.next?.length) blocks.push(`<p class="feedback-line"><span class="feedback-tag">다음에 이어가기</span>${fb.next.map(esc).join(" · ")}</p>`);
   return blocks.join("") || `<p class="feedback-idle">교사 발화 후 핵심 수행 요소를 짧게 안내합니다.</p>`;
 }

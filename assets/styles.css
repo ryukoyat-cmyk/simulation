@@ -1012,6 +1012,10 @@ button:disabled {
 .feedback-message { margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: #f4f8fb; line-height: 1.55; }
 .feedback-line { margin: 6px 0; font-size: .9rem; }
 .feedback-tag { display: inline-block; margin-right: 6px; padding: 2px 8px; border-radius: 999px; background: #e3edf3; color: #315e77; font-size: .75rem; font-weight: 800; }
+.feedback-suggestion { margin: 8px 0; padding: 12px 14px; border-radius: 12px; border-left: 4px solid var(--accent); background: #fff8ee; }
+.feedback-suggestion strong { display: block; margin-bottom: 4px; color: #8a5a1c; font-size: .82rem; }
+.feedback-suggestion p { margin: 0; color: #4a3a20; line-height: 1.55; }
+.feedback-citation { display: block; margin-top: 6px; color: var(--muted); font-size: .78rem; }
 .simulation-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
 .simulation-info div { padding: 10px; border-radius: 12px; background: #f4f8fb; }
 .simulation-info div:last-child { grid-column: 1 / -1; }
