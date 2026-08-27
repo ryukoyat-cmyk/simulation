@@ -83,7 +83,8 @@ export default async (req) => {
         situation,
         situationContext,
         teacherType: String(body.teacherType || ""),
-        schoolLevel: String(body.schoolLevel || "")
+        schoolLevel: String(body.schoolLevel || ""),
+        callerHonorific: String(body.callerHonorific || "")
       });
       if (body.sessionId) {
         await saveToSupabase("simulation_messages", {
@@ -195,8 +196,8 @@ const openingFormat = {
 // 예전에는 여기서 parentProfiles라는 한 줄 요약을 따로 두고 있었는데, 그 요약이 클라이언트의
 // 9개 필드짜리 상세 페르소나보다 뒤에 프롬프트에 다시 들어가 유형 특성을 희석시켰습니다.
 // 이제는 body.system을 그대로 기반 삼고, 첫 발화에만 필요한 낭독 지침을 그 위에 덧붙입니다.
-async function createInitialParentText({ system: personaSystem, parentKey, parentType, situation, situationContext, teacherType, schoolLevel }) {
-  const fallback = { text: buildInitialParentText(parentKey, parentType), degraded: true };
+async function createInitialParentText({ system: personaSystem, parentKey, parentType, situation, situationContext, teacherType, schoolLevel, callerHonorific }) {
+  const fallback = { text: buildInitialParentText(parentKey, parentType, callerHonorific), degraded: true };
   if (!situation || !personaSystem) return fallback;
 
   const system = `
@@ -251,18 +252,20 @@ ${personaSystem}
 // 상황 설명문은 3인칭 서술이라 그대로 끼워 넣으면 지문을 낭독하는 것처럼 들리므로,
 // 여기서는 상황을 인용하지 않고 학부모가 실제로 꺼낼 법한 말로만 시작합니다.
 // 구체적인 상황은 화면 오른쪽 '민원 상황' 패널에 그대로 표시됩니다.
-function buildInitialParentText(parentKey, parentType) {
+function buildInitialParentText(parentKey, parentType, callerHonorific) {
+  // 클라이언트가 호칭(어머니/아버지)을 보내지 않은 경우에만 중립적인 "학부모"로 대체합니다.
+  const who = String(callerHonorific || "").trim() || "학부모";
   if (parentKey === "anxious" || parentType === "걱정형") {
-    return "선생님, 금쪽이 엄마입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요.";
+    return `선생님, 금쪽이 ${who}입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요.`;
   }
   if (parentKey === "avoidant" || parentType === "회피형") {
-    return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다.";
+    return `선생님, 금쪽이 ${who}입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다.`;
   }
   if (parentKey === "demanding" || parentType === "요구형") {
-    return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다.";
+    return `선생님, 금쪽이 ${who}입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다.`;
   }
   if (parentKey === "pressure" || parentType === "압박형") {
-    return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요.";
+    return `선생님, 금쪽이 ${who}입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요.`;
   }
-  return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다.";
+  return `선생님, 금쪽이 ${who}입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다.`;
 }

@@ -1723,3 +1723,66 @@ textarea:focus-visible {
 @media (max-width: 720px) {
   .parent-stars { margin-top: 4px; font-size: .82rem; }
 }
+
+/* 성별/맥락, 난이도처럼 사진이 없는 선택 화면용 텍스트 카드입니다. */
+.text-choice-grid {
+  width: min(920px, 100%);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.text-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 20px 22px;
+  border: 1px solid rgba(31, 73, 100, .13);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .9);
+  text-align: left;
+  cursor: pointer;
+  transition: .2s ease;
+}
+
+.text-choice:hover,
+.text-choice.selected {
+  transform: translateY(-3px);
+  border-color: #27b7a7;
+  box-shadow: 0 16px 32px rgba(31, 73, 100, .14);
+}
+
+.text-choice-icon { font-size: 1.8rem; }
+.text-choice strong { color: var(--primary-dark); font-size: 1.08rem; }
+.text-choice p { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.55; }
+
+@media (max-width: 720px) {
+  .text-choice-grid { grid-template-columns: 1fr; }
+}
+
+/* 기본·심화 난이도에서 학부모 발화 글을 숨길 때의 자리 표시자입니다. */
+.msg-audio-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* 응대 참고 패널: _response_guides.js 코퍼스를 보여 줍니다. */
+.guide-panel .box-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.guide-toggle {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: #eff5f7;
+  color: var(--primary);
+  font-size: .78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.guide-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.guide-list li { padding: 10px 12px; border-radius: 12px; background: #f4f8fb; }
+.guide-list strong { display: block; margin-bottom: 4px; font-size: .88rem; color: #1d4f5c; }
+.guide-list p { margin: 0; color: #48586a; font-size: .84rem; line-height: 1.55; }
+.guide-source { display: block; margin-top: 6px; color: var(--muted); font-size: .72rem; }

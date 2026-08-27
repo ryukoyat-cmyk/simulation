@@ -19,19 +19,36 @@ const PARENTS = [
 ];
 const TEACHERS = [{ id: "preservice", label: "예비교원", image: "assets/cards/preservice.svg", detail: "교직 진입 전 민원 대응의 기본 언어와 절차를 연습합니다." }, { id: "inservice", label: "현직교원", image: "assets/cards/inservice.svg", detail: "학교 맥락의 대응 범위와 협업 절차를 점검합니다." }];
 const SCHOOLS = [{ id: "elementary", label: "초등학교", image: "assets/cards/elementary.svg", detail: "학생 생활·보호와 일상 소통 맥락" }, { id: "middle", label: "중학교", image: "assets/cards/middle.svg", detail: "관계 갈등과 생활지도 맥락" }, { id: "high", label: "고등학교", image: "assets/cards/high.svg", detail: "진로·평가·수업 맥락" }];
+// 말투를 성별로 규정하지 않습니다. 대신 민원을 제기하는 맥락(직접 겪었는지, 전해 들었는지)이
+// 질문의 구체성과 학교 절차에 대한 이해도에 자연스러운 차이를 만듭니다. 태도·난도는 학부모 유형이 정합니다.
+const CONTEXTS = [
+  { id: "mother_witness", icon: "👩", label: "어머니 · 직접 겪음", honorific: "어머니", voice: "coral", desc: "아이의 하루 일과를 가까이서 지켜봐 왔고, 오늘 일도 직접 보거나 들었습니다.", context: "학부모는 평소 자녀의 학교생활을 세세히 파악하고 있어, 오늘 일에 대해서도 구체적인 정황(시간·장소·누가 있었는지)부터 캐묻는다. 이전에도 학교와 연락한 이력이 있다." },
+  { id: "mother_secondhand", icon: "👩", label: "어머니 · 전해 들음", honorific: "어머니", voice: "coral", desc: "아이에게 전해 들은 이야기만으로 판단해 학교에 연락합니다.", context: "학부모는 아이의 말만 듣고 연락했기 때문에 사실관계를 하나씩 확인하려 하며, 학교 절차나 담당자 구분에 익숙하지 않을 수 있다." },
+  { id: "father_witness", icon: "👨", label: "아버지 · 직접 겪음", honorific: "아버지", voice: "onyx", desc: "아이의 하루 일과를 가까이서 지켜봐 왔고, 오늘 일도 직접 보거나 들었습니다.", context: "학부모는 평소 자녀의 학교생활을 세세히 파악하고 있어, 오늘 일에 대해서도 구체적인 정황(시간·장소·누가 있었는지)부터 캐묻는다. 이전에도 학교와 연락한 이력이 있다." },
+  { id: "father_secondhand", icon: "👨", label: "아버지 · 전해 들음", honorific: "아버지", voice: "onyx", desc: "아이에게 전해 들은 이야기만으로 판단해 학교에 연락합니다.", context: "학부모는 아이의 말만 듣고 연락했기 때문에 사실관계를 하나씩 확인하려 하며, 학교 절차나 담당자 구분에 익숙하지 않을 수 있다." }
+];
+// 난이도는 상황 정보량이 아니라(민원 상황은 항상 전체를 보여 줍니다) 학부모 발화 텍스트 노출,
+// 즉시 피드백 제공 여부, 응대 참고 카드 노출 방식을 통제합니다.
+const DIFFICULTIES = [
+  { id: "basic", icon: "🌱", label: "기초", desc: "학부모 말이 음성과 함께 글로도 보이고, 즉시 피드백과 응대 참고 카드가 항상 열려 있습니다." },
+  { id: "standard", icon: "🎯", label: "기본", desc: "학부모 말은 음성으로만 나오고, 즉시 피드백은 계속 제공됩니다. 응대 참고 카드는 필요할 때 펼쳐 볼 수 있습니다." },
+  { id: "advanced", icon: "🔥", label: "심화", desc: "학부모 말은 음성으로만 나오고, 즉시 피드백과 응대 참고 카드 없이 실전처럼 연습합니다." }
+];
 const footer = `<footer class="copyright"><strong>© 2026 박재윤. All Rights Reserved.</strong><span>예비교원의 학부모 민원 대응 역량 강화를 위한 AI 기반 시뮬레이션</span></footer>`;
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 const uid = () => crypto.randomUUID?.() || `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-function freshState() { return { screen: "title", teacherType: "", schoolLevel: "", parentId: "cooperative", situationMode: "", randomSituation: "", randomContext: "", manualSituation: "", situation: "", situationContext: "", msgs: [], apiMsgs: [], sessionId: uid(), loading: false, evaluating: false, ended: false, feedback: [], turnFeedback: null, feedbackLoading: false, evaluation: null, error: "", draft: "", listening: false, speaking: false, recording: false, playingIndex: null, openIssues: [], confirmExit: false }; }
+function freshState() { return { screen: "title", teacherType: "", schoolLevel: "", parentId: "cooperative", callerId: "", difficulty: "", situationMode: "", randomSituation: "", randomFields: null, randomContext: "", caseTopic: "", caseList: [], caseExcludeIds: [], selectedCase: null, manualSituation: "", situation: "", situationContext: "", msgs: [], apiMsgs: [], sessionId: uid(), loading: false, evaluating: false, ended: false, feedback: [], turnFeedback: null, feedbackLoading: false, evaluation: null, error: "", draft: "", listening: false, speaking: false, recording: false, playingIndex: null, openIssues: [], confirmExit: false, guides: [], guidesOpen: false, forceRevealed: new Set() }; }
 let S = freshState();
 const parent = () => PARENTS.find((x) => x.id === S.parentId) || PARENTS[0];
 const teacher = () => TEACHERS.find((x) => x.id === S.teacherType);
 const school = () => SCHOOLS.find((x) => x.id === S.schoolLevel);
+const caller = () => CONTEXTS.find((x) => x.id === S.callerId) || CONTEXTS[0];
+const difficulty = () => DIFFICULTIES.find((x) => x.id === S.difficulty) || DIFFICULTIES[0];
 const teacherTurns = () => S.msgs.filter((x) => x.role === "teacher").length;
 
-function systemPrompt() { const p = parent().persona; return `당신은 학부모 민원 대응 연습의 AI 학부모입니다. 사용자는 항상 교사 역할입니다. 당신은 언제나 학부모 역할만 유지합니다. 절대로 교사가 되거나, 교사에게 조언·평가·수업지시·역할 안내를 하지 마세요. 사과나 해결 약속도 학부모의 관점에서만 말하세요.\n\n[상황]\n교원 유형: ${teacher()?.label || "미선택"}\n학교급: ${school()?.label || "미선택"}\n민원 상황: ${S.situation}\n상세 맥락: ${S.situationContext || S.situation}\n\n[선택된 학부모 유형: ${parent().label}]\n- 핵심 관심사: ${p.concern}\n- 감정 강도: ${p.emotion}\n- 자주 쓰는 말투: ${p.style}\n- 질문 방식: ${p.questions}\n- 반복 행동: ${p.repeat}\n- 갈등 고조 조건: ${p.escalate}\n- 안정 조건: ${p.settle}\n- 허용·비허용 표현 및 경계 반응: ${p.boundaries}\n- 대화 종료 반응: ${p.closing}\n\n[공통 대화 원칙]\n- 선택된 학교급과 민원 상황에서 벗어나지 않습니다.\n- 실제 학부모처럼 2~5문장으로 반응하고, 바로 직전 교사 발화의 구체 내용을 반영합니다.\n- 반드시 교사에게 직접 말하는 1인칭 발화로만 답합니다. '학부모는', '학부모가', '상황은' 같은 해설문을 쓰지 않습니다.\n- 첫 발화부터 ${parent().label}의 말투, 감정 강도, 질문 방식이 분명하게 드러나야 합니다.\n- 욕설·협박·혐오 표현은 생성하지 않습니다. 압박형도 정중한 경계와 공식 절차 안내에 반응 강도를 낮춥니다.\n- 교사가 감정을 인정하고, 사실을 확인하며, 가능한 범위·후속 절차·경계를 명료하게 설명하면 그에 맞게 안정됩니다.`; }
+function systemPrompt() { const p = parent().persona, c = caller(); return `당신은 학부모 민원 대응 연습의 AI 학부모입니다. 사용자는 항상 교사 역할입니다. 당신은 언제나 학부모 역할만 유지합니다. 절대로 교사가 되거나, 교사에게 조언·평가·수업지시·역할 안내를 하지 마세요. 사과나 해결 약속도 학부모의 관점에서만 말하세요.\n\n[상황]\n교원 유형: ${teacher()?.label || "미선택"}\n학교급: ${school()?.label || "미선택"}\n민원 상황: ${S.situation}\n상세 맥락: ${S.situationContext || S.situation}\n\n[선택된 학부모 유형: ${parent().label}]\n- 핵심 관심사: ${p.concern}\n- 감정 강도: ${p.emotion}\n- 자주 쓰는 말투: ${p.style}\n- 질문 방식: ${p.questions}\n- 반복 행동: ${p.repeat}\n- 갈등 고조 조건: ${p.escalate}\n- 안정 조건: ${p.settle}\n- 허용·비허용 표현 및 경계 반응: ${p.boundaries}\n- 대화 종료 반응: ${p.closing}\n\n[민원을 제기하는 사람]\n- 호칭: ${c.honorific} (자신을 소개할 때 이 호칭을 씁니다)\n- 맥락: ${c.context}\n\n[공통 대화 원칙]\n- 선택된 학교급과 민원 상황에서 벗어나지 않습니다.\n- 실제 학부모처럼 2~5문장으로 반응하고, 바로 직전 교사 발화의 구체 내용을 반영합니다.\n- 반드시 교사에게 직접 말하는 1인칭 발화로만 답합니다. '학부모는', '학부모가', '상황은' 같은 해설문을 쓰지 않습니다.\n- 첫 발화부터 ${parent().label}의 말투, 감정 강도, 질문 방식이 분명하게 드러나야 합니다.\n- 욕설·협박·혐오 표현은 생성하지 않습니다. 압박형도 정중한 경계와 공식 절차 안내에 반응 강도를 낮춥니다.\n- 교사가 감정을 인정하고, 사실을 확인하며, 가능한 범위·후속 절차·경계를 명료하게 설명하면 그에 맞게 안정됩니다.`; }
 
-function render() { ({ title: renderTitle, teacher: renderTeacher, school: renderSchool, parent: renderParent, situation: renderSituation, simulation: renderSimulation, result: renderResult }[S.screen] || renderTitle)(); }
+function render() { ({ title: renderTitle, teacher: renderTeacher, school: renderSchool, parent: renderParent, caller: renderCaller, difficulty: renderDifficulty, situation: renderSituation, simulation: renderSimulation, result: renderResult }[S.screen] || renderTitle)(); }
 function renderTitle() { app.innerHTML = `<main class="page title-page"><section class="title-shell"><div class="title-hero"><p class="eyebrow">TEACHER PRACTICE LAB</p><h1 class="app-title">학부모 민원 대응<br>음성 시뮬레이션</h1><p class="app-subtitle">안전한 가상 대화에서 민원 대응을 연습하고, 대화 과정을 성찰해 보세요.</p><button class="btn-primary" id="start">시작하기</button></div><article class="privacy-card title-notice glass"><h2>연구 참여 및 개인정보 안내</h2><div class="privacy-lines"><p>기본 입력은 음성 또는 텍스트이며, 음성 원본은 저장하지 않습니다.</p><p>대화 내용과 AI 평가 결과는 연구 및 시스템 개선 자료로 활용될 수 있습니다.</p><p>실제 학생·학부모·교직원 이름, 연락처, 학교명 등 개인정보는 입력하지 마세요.</p><p>AI 평가는 학습 피드백이며 객관적 역량 판정이 아닙니다.</p></div></article>${footer}</section></main>`; $("start").onclick = () => { S.screen = "teacher"; render(); }; }
 // 학부모 유형 카드는 설명 대신 대표 대사 한 줄 + 별점으로 유형을 전달합니다.
 function stars(n) { return "★".repeat(n) + "☆".repeat(3 - n); }
@@ -55,13 +72,71 @@ function selectionPage({ step, title, items, current, type, back, next }) {
   });
   $("back").onclick = back;
 }
-function renderTeacher() { selectionPage({ step: "01", title: "현재 해당하는 항목을 선택해 주세요", items: TEACHERS, current: S.teacherType, type: "teacher", back: () => { S.screen = "title"; render(); }, next: () => { S.screen = "school"; render(); } }); }
-function renderSchool() { selectionPage({ step: "02", title: "학교급을 선택해 주세요", items: SCHOOLS, current: S.schoolLevel, type: "school", back: () => { S.screen = "teacher"; render(); }, next: () => { S.screen = "parent"; render(); } }); }
-function renderParent() { selectionPage({ step: "03", title: "학부모 유형을 선택해 주세요", items: PARENTS, current: S.parentId, type: "parent", back: () => { S.screen = "school"; render(); }, next: () => { S.screen = "situation"; render(); } }); }
-function renderSituation() { const isRandom = S.situationMode === "random", isManual = S.situationMode === "manual", current = isRandom ? S.randomSituation : S.manualSituation; app.innerHTML = `<main class="page"><section class="page-center situation-page"><p class="step-index">STEP 04</p><h2 class="step-title">민원 상황을 선택해 주세요</h2><p class="step-copy">기존 사례 기반 상황을 생성하거나 연습할 상황을 직접 입력할 수 있습니다.</p><div class="choice-grid"><section class="choice-panel glass ${isRandom ? "selected" : ""}"><div class="choice-head"><h3>상황 생성하기</h3><button class="mode-button" id="randomMode">선택</button></div><p class="choice-help">선택한 학교급의 맥락을 반영한 가상 민원 상황을 만듭니다.</p><button class="dice-button" id="generate" type="button">✦ 자동생성</button><textarea id="randomInput" class="situation-textarea" placeholder="생성된 민원 상황이 표시됩니다.">${esc(S.randomSituation)}</textarea></section><section class="choice-panel glass ${isManual ? "selected" : ""}"><div class="choice-head"><h3>직접 입력하기</h3><button class="mode-button" id="manualMode">선택</button></div><p class="choice-help">개인정보를 제외한 가상 상황만 입력해 주세요.</p><textarea id="manualInput" class="situation-textarea" placeholder="연습할 민원 상황을 입력해 주세요. (개인정보는 절대 입력하지 마세요)">${esc(S.manualSituation)}</textarea></section></div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button><button class="btn-primary" id="next" ${current.trim() ? "" : "disabled"}>대화 시작</button></div>${footer}</section></main>`; const setMode = (mode) => { S.situationMode = mode; renderSituation(); }; $("randomMode").onclick = () => setMode("random"); $("manualMode").onclick = () => setMode("manual"); $("randomInput").oninput = (e) => { S.situationMode = "random"; S.randomSituation = e.target.value; $("next").disabled = !e.target.value.trim(); }; $("manualInput").oninput = (e) => { S.situationMode = "manual"; S.manualSituation = e.target.value; $("next").disabled = !e.target.value.trim(); }; $("generate").onclick = generateSituation; $("back").onclick = () => { S.screen = "parent"; render(); }; $("next").onclick = startSimulation; }
-async function generateSituation() { S.situationMode = "random"; const button = $("generate"); button.disabled = true; try { const res = await fetch("/api/random-situation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teacherType: teacher()?.label, schoolLevel: school()?.label }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); S.randomSituation = data.situation || ""; S.randomContext = data.situationContext || data.context || S.randomSituation; } catch (e) { S.randomSituation = `${school()?.label || "학교"}에서 학생 생활과 관련해 학부모가 사실 확인과 후속 조치를 요청하는 상황입니다.`; S.randomContext = S.randomSituation; } renderSituation(); }
-function renderMessages() { if (!S.msgs.length) return `<div class="msg msg-system">AI 학부모가 대화를 시작하는 중입니다.</div>`; return S.msgs.map((m, index) => `<div class="msg msg-${m.role}">${m.role === "parent" || m.role === "teacher" ? `<span class="speaker-label">${m.role === "parent" ? "학부모" : "교사"}</span>` : ""}${esc(m.content)}${m.role === "parent" ? replayButton(index) : ""}</div>`).join(""); }
-function renderSimulation() { const turns = teacherTurns(), locked = S.loading || S.evaluating || S.ended; app.innerHTML = `<main class="page"><section class="sim-page"><div class="sim-layout"><section class="chat-panel glass"><div class="chat-panel-head"><div class="box-label">대화 연습</div><span class="state-badge ${S.recording || S.speaking || S.ended ? "" : "muted"}">${simStateLabel()}</span></div><div class="chat-history" id="history">${renderMessages()}${S.loading ? `<div class="msg msg-system">학부모가 응답을 준비하고 있습니다…</div>` : ""}</div><div class="input-strip"><textarea id="teacherInput" class="teacher-input" placeholder="${S.listening ? "말씀하시면 자동으로 입력됩니다." : "교사 역할로 답변해 주세요."}" ${locked ? "disabled" : ""}></textarea><div class="input-actions"><button id="voice" class="voice-button ${S.recording ? "listening" : ""}" aria-pressed="${S.recording}" ${voiceButtonDisabled() ? "disabled" : ""}>${voiceButtonLabel()}</button><button id="send" class="send-button" ${locked ? "disabled" : ""}>전송</button></div></div></section><aside class="right-panel glass"><section class="side-section"><div class="box-label">연습 정보</div><dl class="simulation-info"><div><dt>교원 유형</dt><dd>${esc(teacher()?.label)}</dd></div><div><dt>학교급</dt><dd>${esc(school()?.label)}</dd></div><div><dt>학부모 유형</dt><dd>${esc(parent().label)}</dd></div></dl><h3 class="parent-name">${esc(parent().label)}</h3><p>${esc(parent().desc)}</p><div class="scenario-copy"><span>민원 상황</span><p>${esc(S.situation)}</p></div></section><section class="side-section"><div class="box-label">즉시 피드백</div><div id="turnFeedback">${renderTurnFeedback()}</div></section></aside></div>${S.confirmExit ? `<div class="inline-error inline-confirm" role="alert"><strong>학부모의 요구 ${S.openIssues.length}건이 아직 해결되지 않았습니다.</strong><span>${S.openIssues.map(esc).join(" · ")}</span><span class="inline-error-note">그래도 대화를 마치고 평가로 넘어갈까요? 이 경우 결과에 중도 종료로 표시됩니다.</span><div class="inline-confirm-actions"><button class="btn-outline" id="cancelExit" type="button">계속 대화하기</button><button class="btn-primary" id="confirmExit" type="button">그래도 종료</button></div></div>` : ""}${S.error ? `<div class="inline-error" role="alert"><strong>평가를 완료하지 못했습니다.</strong><span>${esc(S.error)}</span><span class="inline-error-note">대화 기록은 그대로 남아 있습니다.</span><button class="btn-outline" id="retryEvaluate" type="button">평가 다시 시도</button></div>` : ""}<div class="action-row"><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="retry">같은 조건 재도전</button><button class="btn-primary" id="evaluate" ${turns >= 4 && !S.loading && !S.evaluating ? "" : "disabled"}>대화 종료 및 평가</button></div>${footer}</section></main>${S.evaluating ? `<div class="analysis-overlay" role="status"><div class="analysis-card"><span class="analysis-spinner"></span><strong>결과 분석 중입니다.</strong><p>조금만 기다려주세요.</p></div></div>` : ""}`; $("home").onclick = () => { stopVoice(); S = freshState(); render(); }; $("retry").onclick = restart; $("evaluate").onclick = evaluate; if ($("retryEvaluate")) $("retryEvaluate").onclick = evaluate; if ($("cancelExit")) $("cancelExit").onclick = cancelExitConfirm; if ($("confirmExit")) $("confirmExit").onclick = evaluate; const input = $("teacherInput"); if (input) { input.value = S.draft; input.oninput = (e) => { S.draft = e.target.value; if (S.recording) { committedText = e.target.value.trim(); consumedFinal = sessionFinal; carryOver = true; } }; } if ($("send")) $("send").onclick = send; if ($("voice")) $("voice").onclick = toggleVoiceInput; document.querySelectorAll(".replay-button").forEach((el) => { el.onclick = () => { const index = Number(el.dataset.index), message = S.msgs[index]; if (!message) return; if (S.playingIndex === index) { stopPlayback(); S.speaking = false; paintVoiceState(); syncSim(); return; } unlockAudio(); speakParent(message.content, index); }; }); requestAnimationFrame(() => { if ($("history")) $("history").scrollTop = $("history").scrollHeight; }); }
+function renderTeacher() { selectionPage({ step: "01/06", title: "현재 해당하는 항목을 선택해 주세요", items: TEACHERS, current: S.teacherType, type: "teacher", back: () => { S.screen = "title"; render(); }, next: () => { S.screen = "school"; render(); } }); }
+function renderSchool() { selectionPage({ step: "02/06", title: "학교급을 선택해 주세요", items: SCHOOLS, current: S.schoolLevel, type: "school", back: () => { S.screen = "teacher"; render(); }, next: () => { S.screen = "parent"; render(); } }); }
+function renderParent() { selectionPage({ step: "03/06", title: "학부모 유형을 선택해 주세요", items: PARENTS, current: S.parentId, type: "parent", back: () => { S.screen = "school"; render(); }, next: () => { S.screen = "caller"; render(); } }); }
+
+// 텍스트 카드용 선택 화면입니다. selectionPage()는 이미지 카드 전용이라
+// 성별·난이도처럼 사진이 없는 선택지에는 이 함수를 씁니다. 클릭 즉시 다음 화면으로 넘어갑니다.
+function textChoicePage({ step, title, help, items, current, onPick, back, next }) {
+  app.innerHTML = `<main class="page"><section class="page-center selection-page"><p class="step-index">STEP ${step}</p><h2 class="step-title">${title}</h2>${help ? `<p class="step-copy">${help}</p>` : ""}<div class="text-choice-grid">${items.map((item) => `<button class="text-choice ${current === item.id ? "selected" : ""}" data-id="${item.id}" type="button"><span class="text-choice-icon">${item.icon}</span><strong>${esc(item.label)}</strong><p>${esc(item.desc)}</p></button>`).join("")}</div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button></div>${footer}</section></main>`;
+  document.querySelectorAll(".text-choice").forEach((el) => el.onclick = () => { onPick(el.dataset.id); next(); });
+  $("back").onclick = back;
+}
+
+function renderCaller() {
+  textChoicePage({
+    step: "04/06",
+    title: "민원을 제기하는 학부모는 누구인가요?",
+    help: "말투나 태도가 아니라, 얼마나 직접 겪은 일인지가 대화의 구체성에 영향을 줍니다.",
+    items: CONTEXTS,
+    current: S.callerId,
+    onPick: (id) => { S.callerId = id; },
+    back: () => { S.screen = "parent"; render(); },
+    next: () => { S.screen = "difficulty"; render(); }
+  });
+}
+
+function renderDifficulty() {
+  textChoicePage({
+    step: "05/06",
+    title: "연습 난이도를 선택해 주세요",
+    help: "민원 상황은 어떤 난이도에서도 항상 전체가 보입니다. 난이도는 학부모 말이 글로도 보이는지, 즉시 피드백과 응대 참고 카드를 함께 볼 수 있는지를 정합니다.",
+    items: DIFFICULTIES,
+    current: S.difficulty,
+    onPick: (id) => { S.difficulty = id; },
+    back: () => { S.screen = "caller"; render(); },
+    next: () => { S.screen = "situation"; render(); }
+  });
+}
+function renderSituation() { const isRandom = S.situationMode === "random", isManual = S.situationMode === "manual", current = isRandom ? S.randomSituation : S.manualSituation; app.innerHTML = `<main class="page"><section class="page-center situation-page"><p class="step-index">STEP 06/06</p><h2 class="step-title">민원 상황을 선택해 주세요</h2><p class="step-copy">기존 사례 기반 상황을 생성하거나 연습할 상황을 직접 입력할 수 있습니다.</p><div class="choice-grid"><section class="choice-panel glass ${isRandom ? "selected" : ""}"><div class="choice-head"><h3>상황 생성하기</h3><button class="mode-button" id="randomMode">선택</button></div><p class="choice-help">선택한 학교급의 맥락을 반영한 가상 민원 상황을 만듭니다.</p><button class="dice-button" id="generate" type="button">✦ 자동생성</button><textarea id="randomInput" class="situation-textarea" placeholder="생성된 민원 상황이 표시됩니다.">${esc(S.randomSituation)}</textarea></section><section class="choice-panel glass ${isManual ? "selected" : ""}"><div class="choice-head"><h3>직접 입력하기</h3><button class="mode-button" id="manualMode">선택</button></div><p class="choice-help">개인정보를 제외한 가상 상황만 입력해 주세요.</p><textarea id="manualInput" class="situation-textarea" placeholder="연습할 민원 상황을 입력해 주세요. (개인정보는 절대 입력하지 마세요)">${esc(S.manualSituation)}</textarea></section></div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button><button class="btn-primary" id="next" ${current.trim() ? "" : "disabled"}>대화 시작</button></div>${footer}</section></main>`; const setMode = (mode) => { S.situationMode = mode; renderSituation(); }; $("randomMode").onclick = () => setMode("random"); $("manualMode").onclick = () => setMode("manual"); $("randomInput").oninput = (e) => { S.situationMode = "random"; S.randomSituation = e.target.value; $("next").disabled = !e.target.value.trim(); }; $("manualInput").oninput = (e) => { S.situationMode = "manual"; S.manualSituation = e.target.value; $("next").disabled = !e.target.value.trim(); }; $("generate").onclick = generateSituation; $("back").onclick = () => { S.screen = "difficulty"; render(); }; $("next").onclick = startSimulation; }
+async function generateSituation() { S.situationMode = "random"; const button = $("generate"); button.disabled = true; try { const res = await fetch("/api/random-situation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teacherType: teacher()?.label, schoolLevel: school()?.label }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error); S.randomSituation = data.situation || ""; S.randomContext = data.situationContext || data.context || S.randomSituation; S.randomFields = data.fields || null; } catch (e) { S.randomSituation = `${school()?.label || "학교"}에서 학생 생활과 관련해 학부모가 사실 확인과 후속 조치를 요청하는 상황입니다.`; S.randomContext = S.randomSituation; S.randomFields = null; } renderSituation(); }
+// 기본·심화 난이도는 학부모 말을 음성으로만 듣게 합니다(글로 미리 읽지 않고 듣기 연습).
+// 다만 재생이 완전히 실패한 발화(S.forceRevealed)는 난이도와 무관하게 글로 보여 줍니다.
+function parentTextVisible(index) { return difficulty().id === "basic" || S.forceRevealed.has(index); }
+// 응대 참고 카드는 심화가 아닐 때만 필요하므로 시뮬레이션 시작 시 한 번만 불러옵니다.
+async function loadGuides() {
+  try {
+    const res = await fetch("/api/guides");
+    const data = await res.json();
+    S.guides = Array.isArray(data.guides) ? data.guides : [];
+  } catch (error) {
+    S.guides = [];
+  }
+  syncSim();
+}
+function renderMessages() {
+  if (!S.msgs.length) return `<div class="msg msg-system">AI 학부모가 대화를 시작하는 중입니다.</div>`;
+  return S.msgs.map((m, index) => {
+    if (m.role !== "parent" && m.role !== "teacher") return `<div class="msg msg-${m.role}">${esc(m.content)}</div>`;
+    const label = `<span class="speaker-label">${m.role === "parent" ? "학부모" : "교사"}</span>`;
+    if (m.role === "teacher") return `<div class="msg msg-teacher">${label}${esc(m.content)}</div>`;
+    const hidden = !parentTextVisible(index);
+    const body = hidden ? `<span class="msg-audio-only">🔊 음성으로 들어보세요</span>` : esc(m.content);
+    return `<div class="msg msg-parent ${hidden ? "msg-hidden-text" : ""}">${label}${body}${replayButton(index)}</div>`;
+  }).join("");
+}
+function renderSimulation() { const turns = teacherTurns(), locked = S.loading || S.evaluating || S.ended; app.innerHTML = `<main class="page"><section class="sim-page"><div class="sim-layout"><section class="chat-panel glass"><div class="chat-panel-head"><div class="box-label">대화 연습</div><span class="state-badge ${S.recording || S.speaking || S.ended ? "" : "muted"}">${simStateLabel()}</span></div><div class="chat-history" id="history">${renderMessages()}${S.loading ? `<div class="msg msg-system">학부모가 응답을 준비하고 있습니다…</div>` : ""}</div><div class="input-strip"><textarea id="teacherInput" class="teacher-input" placeholder="${S.listening ? "말씀하시면 자동으로 입력됩니다." : "교사 역할로 답변해 주세요."}" ${locked ? "disabled" : ""}></textarea><div class="input-actions"><button id="voice" class="voice-button ${S.recording ? "listening" : ""}" aria-pressed="${S.recording}" ${voiceButtonDisabled() ? "disabled" : ""}>${voiceButtonLabel()}</button><button id="send" class="send-button" ${locked ? "disabled" : ""}>전송</button></div></div></section><aside class="right-panel glass"><section class="side-section"><div class="box-label">연습 정보</div><dl class="simulation-info"><div><dt>교원 유형</dt><dd>${esc(teacher()?.label)}</dd></div><div><dt>학교급</dt><dd>${esc(school()?.label)}</dd></div><div><dt>학부모 유형</dt><dd>${esc(parent().label)}</dd></div></dl><h3 class="parent-name">${esc(parent().label)}</h3><p>${esc(parent().desc)}</p><div class="scenario-copy"><span>민원 상황</span><p>${esc(S.situation)}</p></div></section>${difficulty().id !== "advanced" ? `<section class="side-section"><div class="box-label">즉시 피드백</div><div id="turnFeedback">${renderTurnFeedback()}</div></section>` : ""}${difficulty().id !== "advanced" ? renderGuidePanel() : ""}</aside></div>${S.confirmExit ? `<div class="inline-error inline-confirm" role="alert"><strong>학부모의 요구 ${S.openIssues.length}건이 아직 해결되지 않았습니다.</strong><span>${S.openIssues.map(esc).join(" · ")}</span><span class="inline-error-note">그래도 대화를 마치고 평가로 넘어갈까요? 이 경우 결과에 중도 종료로 표시됩니다.</span><div class="inline-confirm-actions"><button class="btn-outline" id="cancelExit" type="button">계속 대화하기</button><button class="btn-primary" id="confirmExit" type="button">그래도 종료</button></div></div>` : ""}${S.error ? `<div class="inline-error" role="alert"><strong>평가를 완료하지 못했습니다.</strong><span>${esc(S.error)}</span><span class="inline-error-note">대화 기록은 그대로 남아 있습니다.</span><button class="btn-outline" id="retryEvaluate" type="button">평가 다시 시도</button></div>` : ""}<div class="action-row"><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="retry">같은 조건 재도전</button><button class="btn-primary" id="evaluate" ${turns >= 4 && !S.loading && !S.evaluating ? "" : "disabled"}>대화 종료 및 평가</button></div>${footer}</section></main>${S.evaluating ? `<div class="analysis-overlay" role="status"><div class="analysis-card"><span class="analysis-spinner"></span><strong>결과 분석 중입니다.</strong><p>조금만 기다려주세요.</p></div></div>` : ""}`; $("home").onclick = () => { stopVoice(); S = freshState(); render(); }; $("retry").onclick = restart; $("evaluate").onclick = evaluate; if ($("retryEvaluate")) $("retryEvaluate").onclick = evaluate; if ($("cancelExit")) $("cancelExit").onclick = cancelExitConfirm; if ($("confirmExit")) $("confirmExit").onclick = evaluate; if ($("guideToggle")) $("guideToggle").onclick = () => { S.guidesOpen = !S.guidesOpen; syncSim(); }; const input = $("teacherInput"); if (input) { input.value = S.draft; input.oninput = (e) => { S.draft = e.target.value; if (S.recording) { committedText = e.target.value.trim(); consumedFinal = sessionFinal; carryOver = true; } }; } if ($("send")) $("send").onclick = send; if ($("voice")) $("voice").onclick = toggleVoiceInput; document.querySelectorAll(".replay-button").forEach((el) => { el.onclick = () => { const index = Number(el.dataset.index), message = S.msgs[index]; if (!message) return; if (S.playingIndex === index) { stopPlayback(); S.speaking = false; paintVoiceState(); syncSim(); return; } unlockAudio(); speakParent(message.content, index); }; }); requestAnimationFrame(() => { if ($("history")) $("history").scrollTop = $("history").scrollHeight; }); }
 // ── 음성 대화 ─────────────────────────────────────────────────────────────
 // 학부모 발화는 TTS로 재생하고, 교사 발화는 마이크로 받습니다.
 // 녹음은 버튼으로만 시작·중지하며 저절로 전송되지 않습니다. 중지하면 인식 결과가 입력창에 남고,
@@ -109,6 +184,38 @@ function paintVoiceState() {
 
 // 즉시 피드백은 방금 교사 발화에 대한 것이라 학부모 응답과 따로 도착합니다.
 // 전체 재렌더링을 하면 녹음 중 입력이 흔들리므로 이 패널만 갱신합니다.
+// 응대 참고 패널: _response_guides.js 코퍼스를 /api/guides로 받아 학부모 유형에 맞는 조각만 보여 줍니다.
+// 기초는 항상 펼침, 기본은 접었다 펼 수 있게, 심화는 패널 자체를 렌더링하지 않습니다(호출부에서 걸러짐).
+function guideTagsFor(parentId) {
+  const common = ["공감적 표현", "비대립적 의사소통"];
+  const byType = {
+    cooperative: ["후속 절차 안내"],
+    anxious: ["공감적 표현", "후속 절차 안내"],
+    avoidant: ["이관·보고 판단"],
+    demanding: ["사안 판단", "이관·보고 판단"],
+    pressure: ["경계 설정", "대응 중단 판단"]
+  };
+  return [...new Set([...common, ...(byType[parentId] || [])])];
+}
+function relevantGuides() {
+  const tags = guideTagsFor(parent().id);
+  const matched = S.guides.filter((g) => g.tags.some((t) => tags.includes(t)));
+  return (matched.length ? matched : S.guides).slice(0, 4);
+}
+function formatGuideCitation(source) {
+  const label = source?.doc === "A" ? "학교민원 처리 매뉴얼" : "학교 민원 응대 안내자료";
+  return `${label} p.${source?.page ?? "?"}`;
+}
+function renderGuidePanel() {
+  const open = difficulty().id === "basic" || S.guidesOpen;
+  const toggle = difficulty().id === "standard" ? `<button class="guide-toggle" id="guideToggle" type="button">${open ? "접기" : "펼치기"}</button>` : "";
+  const items = relevantGuides();
+  const body = !open ? "" : (items.length
+    ? `<ul class="guide-list">${items.map((g) => `<li><strong>${esc(g.title)}</strong><p>${esc(g.body)}</p><span class="guide-source">${esc(formatGuideCitation(g.source))}</span></li>`).join("")}</ul>`
+    : `<p class="feedback-idle">참고 자료를 불러오는 중입니다…</p>`);
+  return `<section class="side-section guide-panel"><div class="box-label">응대 참고${toggle}</div>${body}</section>`;
+}
+
 function renderTurnFeedback() {
   if (S.feedbackLoading) return `<p class="feedback-idle">방금 하신 말씀을 살펴보는 중입니다…</p>`;
   const fb = S.turnFeedback;
@@ -471,10 +578,15 @@ async function speakParent(text, index = null) {
   stopRecording(false);
   S.speaking = true; S.playingIndex = index; paintVoiceState(); syncSim();
   try {
-    const data = await apiFetchJson("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, parentId: parent().id }) }, 1);
+    const data = await apiFetchJson("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, parentId: parent().id, voice: caller().voice }) }, 1);
     await playClip(`data:${data.mime || "audio/mpeg"};base64,${data.audio}`);
   } catch (error) {
-    try { await speakWithBrowser(text); } catch (fallbackError) { notify("audio-blocked", "학부모 음성을 재생하지 못했습니다. 대화 내용은 위에 글로 표시되며 연습은 그대로 이어갈 수 있습니다."); }
+    try { await speakWithBrowser(text); } catch (fallbackError) {
+      // 안전장치: 음성이 전혀 안 나오면 난이도가 텍스트를 숨기고 있어도 이 발화만은 강제로 보여 줍니다.
+      // 텍스트도 숨고 소리도 안 나면 연습 자체가 막힙니다.
+      if (index !== null) S.forceRevealed.add(index);
+      notify("audio-blocked", "학부모 음성을 재생하지 못했습니다. 대화 내용은 위에 글로 표시되며 연습은 그대로 이어갈 수 있습니다.");
+    }
   } finally {
     S.speaking = false; S.playingIndex = null; paintVoiceState(); syncSim();
   }
@@ -490,10 +602,10 @@ function describeNonJson(status) {
   return `서버가 예상치 못한 응답을 보냈습니다. (HTTP ${status})`;
 }
 async function apiFetchJson(url, options, retries = 2) { let lastError; for (let attempt = 0; attempt <= retries; attempt += 1) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000); try { const res = await fetch(url, { ...options, signal: controller.signal }); clearTimeout(timer); const raw = await res.text(); let data = null; try { data = raw ? JSON.parse(raw) : {}; } catch (parseError) { data = null; } if (data === null) { const error = new Error(describeNonJson(res.status)); error.fatal = res.status === 404; throw error; } if (!res.ok) { const error = new Error(data.error || "요청을 처리하지 못했습니다."); error.code = data.code; error.fatal = isFatalApiError(res.status, data.code); throw error; } return data; } catch (error) { clearTimeout(timer); lastError = error; if (error?.fatal || attempt >= retries) break; await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1))); } } throw lastError || new Error("네트워크 요청에 실패했습니다."); }
-async function chat(initial = false) { return apiFetchJson("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: school()?.label, parentId: parent().id, parentType: parent().label, situation: S.situation, situationContext: S.situationContext, system: systemPrompt(), messages: S.apiMsgs, initial, teacherTurns: teacherTurns(), openIssues: S.openIssues }) }); }
+async function chat(initial = false) { return apiFetchJson("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: school()?.label, parentId: parent().id, parentType: parent().label, callerHonorific: caller().honorific, situation: S.situation, situationContext: S.situationContext, system: systemPrompt(), messages: S.apiMsgs, initial, teacherTurns: teacherTurns(), openIssues: S.openIssues }) }); }
 // 서버에 아예 닿지 못했을 때만 쓰는 대사입니다. 상황 설명문은 3인칭 서술이라 낭독하면 지문처럼 들리므로 인용하지 않습니다.
 function fallbackParentOpening() { const p = parent(); if (p.id === "pressure") return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요."; if (p.id === "anxious") return "선생님, 금쪽이 엄마입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요."; if (p.id === "avoidant") return "선생님, 금쪽이 학부모입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다."; if (p.id === "demanding") return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다."; return "선생님, 금쪽이 학부모입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다."; }
-async function startSimulation() { unlockAudio(); stopVoice(); noticeShown.clear(); S.situation = (S.situationMode === "random" ? S.randomSituation : S.manualSituation).trim(); S.situationContext = S.situationMode === "random" ? (S.randomContext || S.situation) : S.situation; S.msgs = []; S.apiMsgs = []; S.draft = ""; S.evaluation = null; S.ended = false; S.feedback = []; S.turnFeedback = null; S.feedbackLoading = false; S.openIssues = []; S.confirmExit = false; feedbackSeq += 1; S.loading = true; S.screen = "simulation"; render(); let opening = ""; try { const data = await chat(true); opening = data.text; S.apiMsgs.push({ role: "assistant", content: opening }); S.msgs.push({ role: "parent", content: opening }); if (data.degraded) S.msgs.push({ role: "system", content: "AI 발화 생성에 실패해 기본 대사로 시작했습니다. 상황에 맞춘 발화가 아니므로, 오른쪽 '민원 상황'을 기준으로 연습해 주세요. 반복되면 사이트 환경변수의 OPENAI_API_KEY를 확인해 주세요." }); } catch (e) { opening = fallbackParentOpening(); S.apiMsgs.push({ role: "assistant", content: opening }); S.msgs.push({ role: "parent", content: opening }); S.msgs.push({ role: "system", content: "일시적인 네트워크 문제로 기본 학부모 발화로 시작했습니다. 이후에도 오류가 반복되면 새로고침 후 다시 시도해 주세요." }); } finally { S.loading = false; render(); } await speakParent(opening, S.msgs.findIndex((m) => m.role === "parent")); }
+async function startSimulation() { unlockAudio(); stopVoice(); noticeShown.clear(); S.situation = (S.situationMode === "random" ? S.randomSituation : S.manualSituation).trim(); S.situationContext = S.situationMode === "random" ? (S.randomContext || S.situation) : S.situation; S.msgs = []; S.apiMsgs = []; S.draft = ""; S.evaluation = null; S.ended = false; S.feedback = []; S.turnFeedback = null; S.feedbackLoading = false; S.openIssues = []; S.confirmExit = false; S.guides = []; S.guidesOpen = false; S.forceRevealed = new Set(); feedbackSeq += 1; S.loading = true; S.screen = "simulation"; render(); if (difficulty().id !== "advanced") loadGuides(); let opening = ""; try { const data = await chat(true); opening = data.text; S.apiMsgs.push({ role: "assistant", content: opening }); S.msgs.push({ role: "parent", content: opening }); if (data.degraded) S.msgs.push({ role: "system", content: "AI 발화 생성에 실패해 기본 대사로 시작했습니다. 상황에 맞춘 발화가 아니므로, 오른쪽 '민원 상황'을 기준으로 연습해 주세요. 반복되면 사이트 환경변수의 OPENAI_API_KEY를 확인해 주세요." }); } catch (e) { opening = fallbackParentOpening(); S.apiMsgs.push({ role: "assistant", content: opening }); S.msgs.push({ role: "parent", content: opening }); S.msgs.push({ role: "system", content: "일시적인 네트워크 문제로 기본 학부모 발화로 시작했습니다. 이후에도 오류가 반복되면 새로고침 후 다시 시도해 주세요." }); } finally { S.loading = false; render(); } await speakParent(opening, S.msgs.findIndex((m) => m.role === "parent")); }
 async function send() { const text = (S.draft || $("teacherInput")?.value || "").trim(); if (!text || S.loading || S.ended) return; stopRecording(false); setDraft(""); S.msgs.push({ role: "teacher", content: text }); S.apiMsgs.push({ role: "user", content: text }); S.loading = true; render(); requestTurnFeedback(text, S.msgs.slice()); let reply = ""; try { const data = await chat(); reply = data.text; S.apiMsgs.push({ role: "assistant", content: reply }); S.msgs.push({ role: "parent", content: reply }); S.ended = Boolean(data.ended); S.feedback = Array.isArray(data.metCriteria) ? data.metCriteria : []; S.openIssues = Array.isArray(data.openIssues) ? data.openIssues : []; } catch (e) { S.msgs.push({ role: "system", content: `AI 응답 오류: ${e.message}${e.fatal ? " 문제가 계속되면 /api/health 를 열어 어떤 항목이 실패하는지 확인해 주세요." : ""}` }); } finally { S.loading = false; render(); } if (reply) await speakParent(reply, S.msgs.length - 1); }
 async function restart() { stopVoice(); S.sessionId = uid(); await startSimulation(); }
 // 학부모의 요구가 아직 남아 있는데 평가를 누르면, 먼저 인라인 배너로 의사를 한 번 더 묻습니다.
