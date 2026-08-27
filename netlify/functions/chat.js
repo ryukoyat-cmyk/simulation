@@ -8,6 +8,10 @@ function chatModel() {
   return getEnv("OPENAI_CHAT_MODEL") || getEnv("OPENAI_MODEL") || "gpt-4.1";
 }
 
+// 자연 종료(ended)는 최소 턴 수 + settle 조건 + 미해결 요구 없음을 모두 요구합니다.
+// 조건이 하나 늘었으니 최소 턴도 4 -> 5로 올려, 대화가 너무 이르게 끝나 보이지 않게 합니다.
+const MIN_ENDING_TURNS = 5;
+
 const metCriteriaEnum = [
   "요구 파악",
   "사실 확인",
@@ -39,24 +43,16 @@ const responseFormat = {
         metCriteria: {
           type: "array",
           items: { type: "string", enum: metCriteriaEnum }
+        },
+        openIssues: {
+          type: "array",
+          items: { type: "string" },
+          description: "학부모가 아직 받지 못한 요구·확인을 짧은 구로 나열. 모두 해결되었으면 빈 배열."
         }
       },
-      required: ["text", "ended", "metCriteria"]
+      required: ["text", "ended", "metCriteria", "openIssues"]
     }
   }
-};
-
-const parentProfiles = {
-  cooperative: "정중하고 차분하다. 사실, 일정, 후속 조치를 순서대로 확인하며 학교와 함께 해결하려는 태도를 보인다. 모호하면 더 구체적으로 묻는다.",
-  anxious: "불안과 염려가 높다. 금쪽이의 정서적 안전과 실제 상태를 반복해서 확인하고, 근거 있는 안심과 다음 확인 시점을 원한다.",
-  avoidant: "이전 경험 때문에 조심스럽고 방어적이다. 처음에는 냉담하거나 짧게 말하지만, 판단 없이 들어 주면 사실을 조금씩 꺼낸다.",
-  demanding: "권리, 기준, 절차를 중시한다. 학교가 할 수 있는 조치와 할 수 없는 조치, 담당자, 처리 기한을 명확히 요구한다.",
-  pressure: "감정 강도가 높고 즉각적인 확인을 요구한다. 답이 모호하면 강하게 재요구하지만 욕설이나 협박은 하지 않는다. 공식 절차와 회신 시점이 분명하면 강도가 낮아진다.",
-  "협력형": "정중하고 차분하다. 사실, 일정, 후속 조치를 순서대로 확인하며 학교와 함께 해결하려는 태도를 보인다. 모호하면 더 구체적으로 묻는다.",
-  "걱정형": "불안과 염려가 높다. 금쪽이의 정서적 안전과 실제 상태를 반복해서 확인하고, 근거 있는 안심과 다음 확인 시점을 원한다.",
-  "회피형": "이전 경험 때문에 조심스럽고 방어적이다. 처음에는 냉담하거나 짧게 말하지만, 판단 없이 들어 주면 사실을 조금씩 꺼낸다.",
-  "요구형": "권리, 기준, 절차를 중시한다. 학교가 할 수 있는 조치와 할 수 없는 조치, 담당자, 처리 기한을 명확히 요구한다.",
-  "압박형": "감정 강도가 높고 즉각적인 확인을 요구한다. 답이 모호하면 강하게 재요구하지만 욕설이나 협박은 하지 않는다. 공식 절차와 회신 시점이 분명하면 강도가 낮아진다."
 };
 
 export default async (req) => {
@@ -73,6 +69,7 @@ export default async (req) => {
     const parentKey = String(body.parentId || parentType);
     const situation = String(body.situation || "").trim();
     const situationContext = String(body.situationContext || situation).trim();
+    const priorOpenIssues = Array.isArray(body.openIssues) ? body.openIssues.map(String).filter(Boolean) : [];
     const input = body.messages.map((message) => ({
       role: message.role === "assistant" ? "assistant" : "user",
       content: String(message.content || "")
@@ -80,6 +77,7 @@ export default async (req) => {
 
     if (isInitial) {
       const { text, degraded } = await createInitialParentText({
+        system: body.system,
         parentKey,
         parentType,
         situation,
@@ -96,7 +94,7 @@ export default async (req) => {
           content: text
         });
       }
-      return json({ text, ended: false, metCriteria: [], degraded });
+      return json({ text, ended: false, metCriteria: [], openIssues: [], degraded });
     }
 
     const system = `
@@ -104,18 +102,23 @@ ${body.system}
 
 [응답 제어]
 - 현재까지 교사 발화 횟수: ${teacherTurns}회
-- 선택된 학부모 유형: ${parentType}
-- 유형별 말투 지침: ${parentProfiles[parentKey] || parentProfiles[parentType] || "선택된 학부모 유형의 설명을 따르세요."}
 - 현재 민원 상황: ${situation || "제공된 상황 없음"}
 - 내부 참고 맥락: ${situationContext || "제공된 참고 맥락 없음"}
+- 이전까지 미해결 상태였던 학부모의 요구: ${priorOpenIssues.length ? priorOpenIssues.join(" / ") : "없음"}
 - 당신은 항상 학부모 역할입니다. 교사처럼 조언, 평가, 수업 지시, 사과문 작성, 상담자 해설을 하지 마세요.
 - 사용자는 항상 교사 역할입니다. 사용자의 발화를 학부모 발화로 오해하지 마세요.
 - text는 반드시 학부모가 교사에게 직접 말하는 1인칭 발화여야 합니다.
 - "학부모는", "학부모가", "사용자는", "교사는", "상황은"처럼 제3자 해설이나 시뮬레이션 설명을 쓰지 마세요.
 - 현재 민원 상황을 바꾸거나 새 사건을 만들지 마세요. 성적, 시험, 수학, 친구관계 등 상황에 없는 쟁점을 새로 만들지 마세요.
 - 첫 발화에서는 선택된 학부모 유형(${parentType})의 성향이 드러나야 합니다.
-- 교사 발화가 4회 미만이면 ended는 반드시 false입니다.
-- 교사 발화가 4회 이상이어도 대화가 자연스럽게 마무리되지 않았으면 ended는 false입니다.
+- openIssues: 위 [선택된 학부모 유형]의 "핵심 관심사"에 비추어, 학부모가 아직 답을 받지 못했거나
+  만족하지 못한 요구·질문을 짧은 구로 나열하세요. 이전 미해결 요구 중 방금 교사 발화로 해결된 것은
+  제거하고, 이번 턴에서 새로 생긴 요구가 있으면 추가합니다. 모두 해결됐으면 빈 배열로 둡니다.
+  가벼운 유형(협력형·걱정형)은 교사가 사실을 확인하고 공감하면 쉽게 해소되지만, 까다로운 유형
+  (요구형·압박형)은 구체적인 근거·기준·절차를 실제로 받기 전까지는 openIssues를 비우지 마세요.
+- 교사 발화가 ${MIN_ENDING_TURNS}회 미만이면 ended는 반드시 false입니다.
+- 교사 발화가 ${MIN_ENDING_TURNS}회 이상이어도, openIssues가 비어 있지 않거나 위 [선택된 학부모 유형]의
+  "안정 조건"이 실제로 충족되지 않았으면 ended는 false입니다. 최소 턴을 채웠다는 이유만으로 종료하지 마세요.
 - ended가 true이면 text에 "대화가 마무리되었습니다."라는 문장을 자연스럽게 포함합니다.
 - metCriteria에는 바로 직전 교사 발화에서 관찰된 수행요소만 넣습니다. 점수는 절대 말하지 않습니다.
 - text에는 학부모가 실제로 말하는 내용만 2~5문장으로 넣습니다. JSON 외 설명을 덧붙이지 마세요.
@@ -132,7 +135,10 @@ ${body.system}
 
     const turn = JSON.parse(raw);
     const text = String(turn.text || "").trim();
-    const ended = teacherTurns >= 4 && Boolean(turn.ended);
+    const openIssues = Array.isArray(turn.openIssues) ? turn.openIssues.map(String).filter(Boolean) : [];
+    // 서버가 최종 결정권을 가집니다. 모델이 ended:true를 내도 최소 턴이나 미해결 요구 조건을 만족하지
+    // 못하면 무시합니다 — 모델의 판단 실수가 대화를 너무 이르게 끝내지 않도록 하는 안전장치입니다.
+    const ended = teacherTurns >= MIN_ENDING_TURNS && Boolean(turn.ended) && openIssues.length === 0;
     const metCriteria = Array.isArray(turn.metCriteria)
       ? turn.metCriteria.filter((item) => metCriteriaEnum.includes(item))
       : [];
@@ -157,7 +163,7 @@ ${body.system}
       });
     }
 
-    return json({ text, ended, metCriteria });
+    return json({ text, ended, metCriteria, openIssues });
   } catch (error) {
     return errorResponse(error, "학부모 응답을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
@@ -184,21 +190,19 @@ const openingFormat = {
 
 // 첫 발화는 화면에 표시되는 동시에 TTS로 낭독됩니다.
 // 상황 서술문을 그대로 읽으면 대사와 지문이 섞여 들리므로, 학부모 자신의 말로 다시 말하게 합니다.
-async function createInitialParentText({ parentKey, parentType, situation, situationContext, teacherType, schoolLevel }) {
+//
+// 페르소나는 클라이언트(body.system, assets/app.js의 systemPrompt())가 유일한 출처입니다.
+// 예전에는 여기서 parentProfiles라는 한 줄 요약을 따로 두고 있었는데, 그 요약이 클라이언트의
+// 9개 필드짜리 상세 페르소나보다 뒤에 프롬프트에 다시 들어가 유형 특성을 희석시켰습니다.
+// 이제는 body.system을 그대로 기반 삼고, 첫 발화에만 필요한 낭독 지침을 그 위에 덧붙입니다.
+async function createInitialParentText({ system: personaSystem, parentKey, parentType, situation, situationContext, teacherType, schoolLevel }) {
   const fallback = { text: buildInitialParentText(parentKey, parentType), degraded: true };
-  if (!situation) return fallback;
+  if (!situation || !personaSystem) return fallback;
 
   const system = `
-당신은 학부모 민원 대응 연습의 AI 학부모입니다. 지금은 교사에게 처음 연락해 민원을 꺼내는 순간입니다.
+${personaSystem}
 
-[상황]
-교원 유형: ${teacherType || "미선택"}
-학교급: ${schoolLevel || "미선택"}
-민원 상황: ${situation}
-상세 맥락: ${situationContext || situation}
-
-[학부모 유형: ${parentType}]
-${parentProfiles[parentKey] || parentProfiles[parentType] || "선택된 학부모 유형의 설명을 따르세요."}
+지금은 위 상황에서 학부모가 교사에게 처음 연락해 민원을 꺼내는 순간입니다.
 
 [말하기 방식]
 지금은 학부모가 교사에게 전화를 걸어 첫 마디를 꺼내는 순간입니다. 이 발화는 음성으로 재생되므로,
