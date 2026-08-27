@@ -288,13 +288,17 @@ function renderGuidePanel() {
   return `<section class="side-section guide-panel"><div class="box-label">응대 참고${toggle}</div>${body}</section>`;
 }
 
+// 요소 이름을 나열하는 대신, "이렇게 말해 보세요" 대사와 그 근거 문서를 가장 먼저 보여줍니다.
+// 대사는 참고자료 모듈(_response_guides.js)에서 가져온 것만 나오므로(서버가 guideId 없이는
+// suggestion을 비워 돌려줍니다), 여기 보이는 문장은 항상 출처가 있습니다.
 function renderTurnFeedback() {
   if (S.feedbackLoading) return `<p class="feedback-idle">방금 하신 말씀을 살펴보는 중입니다…</p>`;
   const fb = S.turnFeedback;
   const met = fb?.met?.length ? fb.met : S.feedback;
   const blocks = [];
-  if (met.length) blocks.push(`<p class="feedback-line"><span class="feedback-tag">드러난 요소</span>${met.map(esc).join(" · ")}</p>`);
   if (fb?.message) blocks.push(`<p class="feedback-message">${esc(fb.message)}</p>`);
+  if (fb?.suggestion) blocks.push(`<div class="feedback-suggestion"><strong>이렇게 말해 보세요</strong><p>"${esc(fb.suggestion)}"</p>${fb.citation ? `<span class="feedback-citation">근거: ${esc(fb.citation.title)} · ${esc(fb.citation.label)}</span>` : ""}</div>`);
+  if (met.length) blocks.push(`<p class="feedback-line"><span class="feedback-tag">드러난 요소</span>${met.map(esc).join(" · ")}</p>`);
   if (fb?.next?.length) blocks.push(`<p class="feedback-line"><span class="feedback-tag">다음에 이어가기</span>${fb.next.map(esc).join(" · ")}</p>`);
   return blocks.join("") || `<p class="feedback-idle">교사 발화 후 핵심 수행 요소를 짧게 안내합니다.</p>`;
 }
@@ -695,8 +699,50 @@ async function evaluate() {
     S.screen = "result";
   } catch (e) { S.error = e.message || "평가 중 오류가 발생했습니다."; } finally { S.evaluating = false; render(); }
 }
-function normalizeEvaluation(data) { const source = new Map((data.criteria || []).map((x) => [x.name, x])); const criteria = CRITERIA.map(([domain, name]) => ({ domain, name, score: Math.max(1, Math.min(4, Number(source.get(name)?.score) || 1)), applicable: Boolean(source.get(name)?.applicable), evidence: source.get(name)?.evidence || "구체적 근거가 확인되지 않았습니다." })); const applicable = criteria.filter((x) => x.applicable); const score = Number(data.score) || (applicable.length ? Math.round(applicable.reduce((sum, x) => sum + x.score, 0) / applicable.length * 140) / 10 : 0); return { ...data, score, criteria, applicableCount: applicable.length }; }
-function renderResult() { const e = S.evaluation, domainHTML = ["Ⅰ. 의사소통", "Ⅱ. 갈등 완화", "Ⅲ. 절차적 대응"].map((domain) => { const items = e.criteria.filter((x) => x.domain === domain && x.applicable); const avg = items.length ? (items.reduce((s, x) => s + x.score, 0) / items.length).toFixed(1) : "해당 없음"; return `<article class="domain-score"><span>${domain}</span><strong>${avg}${items.length ? " / 4" : ""}</strong><small>${items.length}개 관찰</small></article>`; }).join(""); const rows = e.criteria.map((x) => `<tr><td>${x.domain}</td><td>${x.name}</td><td>${x.applicable ? `${x.score}점` : "해당 없음"}</td><td>${esc(x.evidence)}</td></tr>`).join(""); app.innerHTML = `<main class="page"><section class="result-page" id="resultCapture"><header class="result-hero"><p class="eyebrow">SIMULATION RESULT</p><h1>종합 평가 결과</h1>${e.endedEarly ? `<p class="result-endnote">⚠ 학부모의 요구가 해결되지 않은 채 교사가 대화를 중도 종료했습니다.</p>` : ""}<p>${esc(e.summary)}</p><div class="result-score"><span>환산 총점</span><strong>${e.score.toFixed(1)}</strong><em>/ 56점</em><small>관찰 요소 ${e.applicableCount}개 기준</small></div></header><section class="domain-grid">${domainHTML}</section><section class="result-section glass"><h2>종합 의견</h2><p>${esc(e.overallFeedback)}</p><div class="feedback-columns"><div><h3>강점</h3><ul>${(e.strengths || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>대화 기록을 바탕으로 다음 시도에서 확인해 보세요.</li>"}</ul></div><div><h3>보완점</h3><ul>${(e.improvements || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li>사실 확인과 후속 절차 안내를 구체화해 보세요.</li>"}</ul></div></div></section><section class="result-section glass"><h2>14개 요소별 근거</h2><div class="table-wrap"><table class="result-table"><thead><tr><th>영역</th><th>요소</th><th>점수</th><th>근거</th></tr></thead><tbody>${rows}</tbody></table></div></section><section class="result-section glass conversation-export"><h2>대화 기록</h2>${S.msgs.map((m) => `<p><strong>${m.role === "teacher" ? "교사" : m.role === "parent" ? "학부모" : "안내"}</strong> ${esc(m.content)}</p>`).join("")}</section></section><div class="result-actions"><button class="btn-primary" id="retry">동일 조건 재도전</button><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="survey">설문 참여하기</button><button class="btn-outline" id="pdf">PDF 결과 저장</button></div>${footer}</main>`; $("retry").onclick = restart; $("home").onclick = () => { stopVoice(); S = freshState(); render(); }; $("survey").onclick = () => window.open(SURVEY_URL, "_blank", "noopener"); $("pdf").onclick = savePdf; }
+function normalizeEvaluation(data) {
+  const source = new Map((data.criteria || []).map((x) => [x.name, x]));
+  const criteria = CRITERIA.map(([domain, name]) => ({ domain, name, score: Math.max(1, Math.min(4, Number(source.get(name)?.score) || 1)), applicable: Boolean(source.get(name)?.applicable), evidence: source.get(name)?.evidence || "구체적 근거가 확인되지 않았습니다." }));
+  const applicable = criteria.filter((x) => x.applicable);
+  const score = Number(data.score) || (applicable.length ? Math.round(applicable.reduce((sum, x) => sum + x.score, 0) / applicable.length * 140) / 10 : 0);
+  const signals = new Set(["green", "yellow", "red"]);
+  const perTurn = (Array.isArray(data.perTurn) ? data.perTurn : []).map((t) => ({ signal: signals.has(t.signal) ? t.signal : "yellow", reason: String(t.reason || ""), alternative: String(t.alternative || ""), citation: t.citation && t.citation.label ? t.citation : null }));
+  const strategyCitations = Array.isArray(data.strategyCitations) ? data.strategyCitations : [];
+  return { ...data, score, criteria, applicableCount: applicable.length, perTurn, strategyCitations };
+}
+// 반원 게이지 하나만 그리는 순수 SVG 컴포넌트입니다. html2canvas로 PDF를 만들 때도
+// 외부 차트 라이브러리 없이 그대로 래스터화되어야 하므로 canvas가 아니라 SVG path를 씁니다.
+function gaugeSvg(avg, count) {
+  const r = 46, circumference = Math.PI * r;
+  const pct = count ? Math.max(0, Math.min(1, (avg - 1) / 3)) : 0;
+  const dash = (circumference * pct).toFixed(1);
+  const label = count ? `평균 ${avg.toFixed(1)}점` : "관찰 요소 없음";
+  return `<svg viewBox="0 0 108 62" class="gauge" role="img" aria-label="${label}"><path d="M8,58 A46,46 0 0,1 100,58" class="gauge-track" /><path d="M8,58 A46,46 0 0,1 100,58" class="gauge-value" style="stroke-dasharray:${dash} ${circumference.toFixed(1)}" /></svg>`;
+}
+// 대화 복기의 주인공은 실제 대화 기록입니다. 교사 발화마다 신호등과 이유·대안·근거를
+// 그 자리에서 바로 붙여, 별도로 접혀 있는 피드백 목록을 오가며 대조하지 않게 합니다.
+const SIGNAL_LABEL = { green: "적절", yellow: "아쉬움", red: "미흡" };
+function renderConversationReview(e) {
+  let turnIndex = 0;
+  return S.msgs.map((m) => {
+    if (m.role === "system") return `<div class="review-line review-system">${esc(m.content)}</div>`;
+    if (m.role === "parent") return `<div class="review-line review-parent"><span class="review-role">학부모</span><p>${esc(m.content)}</p></div>`;
+    const turn = e.perTurn[turnIndex]; turnIndex += 1;
+    if (!turn) return `<div class="review-line review-teacher"><span class="review-role">교사</span><p>${esc(m.content)}</p></div>`;
+    return `<div class="review-line review-teacher signal-${turn.signal}"><span class="review-role">교사</span><p>${esc(m.content)}</p><div class="review-feedback"><span class="signal-chip signal-${turn.signal}"><i></i>${SIGNAL_LABEL[turn.signal]}</span><p class="review-reason">${esc(turn.reason)}</p>${turn.alternative ? `<p class="review-alt"><strong>이렇게 말했다면</strong> "${esc(turn.alternative)}"</p>` : ""}${turn.citation ? `<p class="review-citation">근거: ${esc(turn.citation.title)} · ${esc(turn.citation.label)}</p>` : ""}</div></div>`;
+  }).join("");
+}
+function renderResult() {
+  const e = S.evaluation;
+  const domainHTML = ["Ⅰ. 의사소통", "Ⅱ. 갈등 완화", "Ⅲ. 절차적 대응"].map((domain) => {
+    const items = e.criteria.filter((x) => x.domain === domain && x.applicable);
+    const avg = items.length ? items.reduce((s, x) => s + x.score, 0) / items.length : 0;
+    return `<article class="domain-score"><span>${domain}</span>${gaugeSvg(avg, items.length)}<strong>${items.length ? avg.toFixed(1) : "해당 없음"}${items.length ? " / 4" : ""}</strong><small>${items.length}개 관찰</small></article>`;
+  }).join("");
+  const rows = e.criteria.map((x) => `<tr><td>${x.domain}</td><td>${x.name}</td><td>${x.applicable ? `${x.score}점` : "해당 없음"}</td><td>${esc(x.evidence)}</td></tr>`).join("");
+  const strategyCitations = e.strategyCitations.map((c) => `<li>${esc(c.title)} · ${esc(c.label)}</li>`).join("");
+  app.innerHTML = `<main class="page"><section class="result-page" id="resultCapture"><header class="result-hero"><p class="eyebrow">SIMULATION RESULT</p><h1>종합 평가 결과</h1>${e.endedEarly ? `<p class="result-endnote">⚠ 학부모의 요구가 해결되지 않은 채 교사가 대화를 중도 종료했습니다.</p>` : ""}<p>${esc(e.summary)}</p><div class="result-score"><span>환산 총점</span><strong>${e.score.toFixed(1)}</strong><em>/ 56점</em><small>관찰 요소 ${e.applicableCount}개 기준</small></div></header><section class="domain-grid">${domainHTML}</section><section class="result-section glass"><h2>총평</h2><p class="result-longtext">${esc(e.overallReview)}</p></section><section class="result-section glass"><h2>추후 민원 대응 전략</h2><p class="result-longtext">${esc(e.strategy)}</p>${strategyCitations ? `<ul class="strategy-citations">${strategyCitations}</ul>` : ""}</section><section class="result-section glass conversation-review"><h2>대화 복기</h2><p class="section-help">초록은 잘한 이유를, 노랑·빨강은 아쉬운 지점과 그 자리에서 바로 쓸 수 있는 대안을 보여 줍니다.</p><div class="review-list">${renderConversationReview(e)}</div></section><section class="result-section glass"><h2>14개 요소별 근거</h2><div class="table-wrap"><table class="result-table"><thead><tr><th>영역</th><th>요소</th><th>점수</th><th>근거</th></tr></thead><tbody>${rows}</tbody></table></div></section></section><div class="result-actions"><button class="btn-primary" id="retry">동일 조건 재도전</button><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="survey">설문 참여하기</button><button class="btn-outline" id="pdf">PDF 결과 저장</button></div>${footer}</main>`;
+  $("retry").onclick = restart; $("home").onclick = () => { stopVoice(); S = freshState(); render(); }; $("survey").onclick = () => window.open(SURVEY_URL, "_blank", "noopener"); $("pdf").onclick = savePdf;
+}
 async function savePdf() { if (!window.html2canvas || !window.jspdf?.jsPDF) { alert("PDF 저장 도구를 불러오지 못했습니다. 인터넷 연결 후 다시 시도해 주세요."); return; } const target = $("resultCapture"); try { const canvas = await window.html2canvas(target, { backgroundColor: "#f6fbfb", scale: 2, useCORS: true, windowWidth: target.scrollWidth, windowHeight: target.scrollHeight }); const { jsPDF } = window.jspdf; const pdf = new jsPDF("p", "mm", "a4"); const width = 190, pageHeight = 277.2, scaledHeight = canvas.height * width / canvas.width; for (let y = 0, page = 0; y < scaledHeight; y += pageHeight, page += 1) { if (page) pdf.addPage(); pdf.addImage(canvas.toDataURL("image/png"), "PNG", 10, 10 - y, width, scaledHeight); } pdf.save(`학부모민원대응_평가결과_${new Date().toISOString().slice(0, 10)}.pdf`); } catch (e) { console.error(e); alert("PDF 저장 중 오류가 발생했습니다."); } }
 render();
 
