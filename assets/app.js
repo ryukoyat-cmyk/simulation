@@ -332,8 +332,9 @@ async function requestTurnFeedback(teacherText, history) {
 function setDraft(value) { S.draft = value; const input = $("teacherInput"); if (input) input.value = value; }
 function joinDraft(...parts) { return parts.map((part) => String(part || "").trim()).filter(Boolean).join(" ").trim(); }
 
-// 한 인스턴스를 수십 번 재사용하면 웹뷰에서 이전 세션의 결과가 새 세션에 섞여 나오는 일이 있습니다.
-// 그 증상은 지금 고치는 중복과 구분이 되지 않으므로, 세션마다 새로 만들어 아예 가능성을 없앱니다.
+// 녹음을 완전히 멈췄다가 다시 시작할 때만 새 인스턴스를 만듭니다(handleRecognitionEnd 참고).
+// 문장 사이 자동 재시작에서는 같은 인스턴스를 재사용해 일부 인앱 웹뷰에서 매 문장마다
+// 마이크 허용 대화상자가 다시 뜨는 문제를 피합니다.
 function ensureRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return null;
@@ -494,10 +495,17 @@ function handleRecognitionEnd() {
   commitSession();
   // 세션을 닫은 뒤 늦게 도착하는 onresult가 방금 본문에 넘긴 말을 되살리지 못하게 무효화합니다.
   sessionEpoch += 1;
-  recognition = null; // 다음 세션은 새 인스턴스로 엽니다.
+  const autoRestarting = S.recording && canListen() && !document.hidden;
+  // 모바일에서는 인식 세션이 문장마다 끊겼다 열립니다. 예전에는 그때마다 새 인스턴스를 만들었는데,
+  // 일부 브라우저(특히 인앱 웹뷰)는 새 SpeechRecognition 인스턴스로 start()할 때마다 마이크 허용
+  // 대화상자를 다시 띄워, 말할 때마다 허용 버튼이 뜨는 문제로 이어졌습니다. 문장 사이 자동 재시작은
+  // 같은 인스턴스를 그대로 재사용해 이 문제를 없앱니다 — 세션 간 재진술은 foldChunks/newSpeech가,
+  // 지연 도착 이벤트는 sessionEpoch가 이미 걸러내므로 인스턴스를 유지해도 안전합니다.
+  // 사용자가 직접 녹음을 멈췄다가 다시 시작할 때만 새 인스턴스를 씁니다.
+  if (!autoRestarting) recognition = null;
   paintVoiceState();
   if (!S.recording) return; // 사용자가 멈췄습니다.
-  if (!canListen() || document.hidden) { S.recording = false; paintVoiceState(); return; }
+  if (!autoRestarting) { S.recording = false; paintVoiceState(); return; }
   // 브라우저가 스스로 끊었을 뿐 녹음은 계속입니다. 조용히 다시 엽니다.
   carryOver = true;
   scheduleRestart();
