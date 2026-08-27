@@ -34,7 +34,12 @@ export default async (req) => {
   try {
     const convo = body.messages.map((m) => `${m.role === "parent" ? "학부모" : "교사"}: ${m.content}`).join("\n");
     const system = `당신은 예비·현직교원의 학부모 민원 대응 연습을 평가하는 교육 전문가입니다. 반드시 JSON 스키마만 반환합니다.\n\n[평가 원칙]\n- 아래 14개 요소 각각을 대화의 실제 교사 발화에 근거해 1~4점으로 평가합니다.\n- 상황상 관찰할 기회가 없거나 해당하지 않는 요소만 applicable:false로 처리합니다. 그 경우에도 score는 1~4 정수로 채우되 총점 계산에서 제외됩니다.\n- 해당 없음은 편의상 주지 마세요. 대화에서 기대 가능한 요소인데 드러나지 않았다면 applicable:true, 1점으로 평가하세요.\n- evidence는 해당 점수의 구체적 대화 근거 또는 미흡 사유를 한 문장으로 씁니다.\n- 점수: 4=일관되고 적절한 수행, 3=대체로 적절하나 일부 불명확, 2=부분 인식·수행, 1=수행되지 않음 또는 부적절.\n- 강점·개선점은 2~4개, 종합 의견은 학습 피드백으로 간결히 씁니다.\n\n[14개 요소]\n${criteria.map(([name, detail], i) => `${i + 1}. ${name}: ${detail}`).join("\n")}`;
-    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: ${body.schoolLevel || "미선택"}\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}\n대화 기록:\n${convo}`;
+    const endedEarly = Boolean(body.endedEarly);
+    const openIssuesAtExit = Array.isArray(body.openIssuesAtExit) ? body.openIssuesAtExit.map(String).filter(Boolean) : [];
+    const exitNote = endedEarly
+      ? `[대화 종료 방식] 학부모의 요구가 해결되지 않은 채 교사가 대화를 종료했습니다(중도 종료). 미해결 요구: ${openIssuesAtExit.length ? openIssuesAtExit.join("; ") : "기록 없음"}. 이 점을 종합 의견에 반영하세요.`
+      : `[대화 종료 방식] 대화가 자연스럽게 마무리되었습니다.`;
+    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: ${body.schoolLevel || "미선택"}\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}${exitNote}\n\n대화 기록:\n${convo}`;
     const model = getEnv("OPENAI_PRIMARY_EVAL_MODEL") || "gpt-4.1-mini";
     const raw = await createWithFallback({ model, reasoningEffort: "low", system, input: context, maxOutputTokens: 2600, responseFormat, timeoutMs: evalTimeout() }, "gpt-4.1-mini");
     const evaluation = JSON.parse(raw);

@@ -271,14 +271,18 @@ button:disabled {
   color: #244a5c;
 }
 
+/* 예전에는 원형 아이콘(✦) 버튼이라 무엇을 하는 버튼인지 알아보기 어려웠습니다.
+   글자 라벨을 붙이면서 원형 대신 일반 알약형 버튼으로 바꿉니다. */
 .dice-button {
-  width: 82px;
-  height: 82px;
-  border-radius: 8px;
+  width: auto;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
   background: #fff;
   border: 1px solid rgba(36, 107, 122, 0.24);
   color: var(--primary-dark);
-  font-size: 2.25rem;
+  font-size: 1rem;
+  font-weight: 750;
   cursor: pointer;
 }
 
@@ -900,6 +904,12 @@ button:disabled {
 .inline-error strong { font-size: 1rem; }
 .inline-error-note { color: #a8646c; font-size: .86rem; }
 .inline-error button { margin-top: 6px; }
+
+/* 종료 확인 배너는 오류가 아니라 결정을 묻는 것이라 경고색 대신 중립 톤을 씁니다. */
+.inline-confirm { border-color: rgba(36, 107, 122, .3); background: #eef6f8; color: #1d4f5c; }
+.inline-confirm .inline-error-note { color: #4d6673; }
+.inline-confirm-actions { display: flex; gap: 10px; margin-top: 6px; }
+.inline-confirm-actions button { margin-top: 0; }
 .feedback-idle { color: var(--muted); }
 .feedback-message { margin: 8px 0; padding: 10px 12px; border-radius: 12px; background: #f4f8fb; line-height: 1.55; }
 .feedback-line { margin: 6px 0; font-size: .9rem; }
@@ -1011,6 +1021,7 @@ button:disabled {
 .result-hero { padding:48px 32px 34px; border-radius:30px; color:white; background:linear-gradient(130deg, #173f57, #246d78); text-align:center; box-shadow:0 20px 45px rgba(31,73,100,.19); }
 .result-hero h1 { margin:8px 0; font-size:clamp(2rem,5vw,3.3rem); letter-spacing:-.07em; }
 .result-hero p { max-width:650px; margin:0 auto; color:rgba(255,255,255,.86); line-height:1.7; }
+.result-endnote { max-width:650px; margin:0 auto 10px; padding:8px 14px; border-radius:999px; background:rgba(240,164,75,.22); color:#ffe9c7; font-weight:700; font-size:.92rem; display:inline-block; }
 .result-hero .eyebrow { color:#a9eee5; font-weight:800; letter-spacing:.12em; }
 .result-score { display:flex; align-items:baseline; justify-content:center; gap:8px; flex-wrap:wrap; margin:28px auto 0; }
 .result-score span, .result-score small { width:100%; color:#c8f3ed; font-size:.9rem; }
@@ -1349,10 +1360,11 @@ textarea:focus-visible {
 }
 
 .dice-button {
-  width: 66px;
-  height: 66px;
+  width: auto;
+  height: 42px;
   margin: 2px auto;
-  font-size: 2rem;
+  padding: 0 16px;
+  font-size: .92rem;
 }
 
 .situation-textarea,
@@ -1688,3 +1700,26 @@ textarea:focus-visible {
   .parent-choice-grid .parent-choice p { min-height: 0; font-size: .78rem; line-height: 1.45; }
 }
 
+
+/* 유형 설명 대신 대표 대사 한 줄 + 별점으로 유형을 전달합니다(card()의 parent-stars/parent-quote). */
+.parent-stars {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: clamp(.78rem, 1.1vw, .95rem);
+  letter-spacing: .06em;
+}
+
+.parent-quote {
+  font-style: italic;
+  color: #3d4f5c;
+  min-height: 0 !important;
+}
+
+.parent-choice p.parent-quote + p {
+  margin-top: 4px;
+}
+
+@media (max-width: 720px) {
+  .parent-stars { margin-top: 4px; font-size: .82rem; }
+}
