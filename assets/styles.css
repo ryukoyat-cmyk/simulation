@@ -341,6 +341,103 @@ button:disabled {
   box-shadow: 0 0 0 3px rgba(36, 107, 122, 0.12);
 }
 
+.choice-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.choice-panel-disabled {
+  opacity: 0.55;
+}
+
+.situation-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(36, 107, 122, 0.06);
+  font-size: 0.88rem;
+}
+
+.situation-field-row {
+  display: flex;
+  gap: 8px;
+}
+
+.situation-field-label {
+  flex: 0 0 auto;
+  min-width: 78px;
+  font-weight: 800;
+  color: var(--primary-dark);
+}
+
+.case-status,
+.case-topic-current {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.case-topic-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.case-topic-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #e8f2f6;
+  color: #23414d;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.case-topic-btn small {
+  margin-left: 6px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.case-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 220px;
+}
+
+.case-card {
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(42, 78, 95, 0.18);
+  background: #fff;
+  cursor: pointer;
+}
+
+.case-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.case-page {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.case-selected blockquote {
+  margin: 8px 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--primary);
+  background: rgba(36, 107, 122, 0.06);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 .privacy-card {
   width: min(900px, 100%);
   padding: 30px;
