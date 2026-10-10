@@ -625,7 +625,7 @@ async function speakParent(text, index = null) {
   stopRecording(false);
   S.speaking = true; S.playingIndex = index; paintVoiceState(); syncSim();
   try {
-    const data = await apiFetchJson("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, parentId: parent().id, voice: caller().voice }) }, 1);
+    const data = await apiFetchJson("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, parentId: parent().id, voice: caller().voice, gender: caller().gender }) }, 1);
     await playClip(`data:${data.mime || "audio/mpeg"};base64,${data.audio}`);
   } catch (error) {
     try { await speakWithBrowser(text); } catch (fallbackError) {

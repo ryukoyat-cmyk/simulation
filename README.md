@@ -54,6 +54,9 @@ Netlify 사이트의 환경변수에 다음 값을 등록해야 합니다.
 - `OPENAI_TIMEOUT_MS`: AI 요청 제한 시간(ms). 기본값은 25000
 - `OPENAI_EVAL_TIMEOUT_MS`: 평가 요청 제한 시간(ms). 기본값은 20000
 - `OPENAI_TTS_MODEL`: 음성 합성 모델. 기본값은 `gpt-4o-mini-tts`
+- `GEMINI_API_KEY`: (선택) 있으면 학부모 음성을 Gemini TTS로 합성하고, 없거나 실패하면 OpenAI 음성으로 대체합니다
+- `GEMINI_TTS_VOICE_FEMALE` / `GEMINI_TTS_VOICE_MALE`: Gemini 음성 이름(기본 Kore / Orus). `/voicetest.html`에서 귀로 골라 정합니다
+- `GEMINI_TTS_MODEL`: 기본값은 `gemini-2.5-flash-preview-tts`, `GEMINI_TIMEOUT_MS`: 기본 8000
 - `OPENAI_TTS_VOICE`: 학부모 음색. 기본값은 `coral`
 - `SUPABASE_URL`: Supabase 프로젝트 URL
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role 키

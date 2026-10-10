@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>학부모 음성 오디션</title>
+<style>body{font-family:system-ui,"Apple SD Gothic Neo",sans-serif;max-width:960px;margin:24px auto;padding:0 16px;color:#17233a}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #d8e3e6;padding:6px;text-align:center}button{padding:5px 10px;cursor:pointer}
+textarea{width:100%;min-height:64px;font:inherit}small{color:#65718a}</style></head>
+<body>
+<h1>학부모 음성 오디션</h1>
+<p><small>서버에 GEMINI_API_KEY가 있어야 Gemini 음성이 나옵니다. 키가 없으면 기존 OpenAI 음성으로 재생되어 결과 칸에 provider가 openai로 표시됩니다.</small></p>
+<p>대사<br><textarea id="text">선생님, 오늘 아이가 학교에서 있었던 일을 들었는데요. 정확히 무슨 일이 있었는지 지금 바로 설명해 주세요.</textarea></p>
+<p>성별 <label><input type="radio" name="g" value="female" checked> 여</label> <label><input type="radio" name="g" value="male"> 남</label></p>
+<table id="grid"><thead><tr><th>음성</th><th>협력형</th><th>걱정형</th><th>회피형</th><th>요구형</th><th>압박형</th></tr></thead><tbody></tbody></table>
+<p id="status"></p>
+<script>
+const VOICES=["Kore","Aoede","Leda","Zephyr","Callirrhoe","Charon","Orus","Fenrir","Puck","Algieba"];
+const TYPES=["cooperative","anxious","avoidant","demanding","pressure"];
+const tb=document.querySelector("#grid tbody");
+for(const v of VOICES){const tr=document.createElement("tr");tr.innerHTML=`<td>${v}</td>`+TYPES.map(t=>`<td><button data-v="${v}" data-t="${t}">▶</button></td>`).join("");tb.appendChild(tr)}
+const audio=new Audio();
+tb.onclick=async e=>{const b=e.target.closest("button");if(!b)return;
+ const st=document.getElementById("status");st.textContent="합성 중…";const t0=performance.now();
+ try{const r=await fetch("/api/speak",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:document.getElementById("text").value,parentId:b.dataset.t,gender:document.querySelector("input[name=g]:checked").value,geminiVoice:b.dataset.v})});
+ const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);
+ st.textContent=`${b.dataset.v} · ${b.dataset.t} · provider=${d.provider||"openai"} · ${((performance.now()-t0)/1000).toFixed(1)}초`;
+ audio.src=`data:${d.mime};base64,${d.audio}`;audio.play()}catch(err){st.textContent="실패: "+err.message}};
+</script></body></html>
