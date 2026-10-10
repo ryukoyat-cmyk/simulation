@@ -9,7 +9,6 @@
 - `assets/styles.css`: 화면 스타일
 - `netlify/functions/chat.js`: AI 학부모 응답 생성 및 첫 발화 생성
 - `netlify/functions/speak.js`: 학부모 발화 음성 합성(TTS)
-- `netlify/functions/random-situation.js`: 사례 기반 연습 상황 생성
 - `netlify/functions/evaluate.js`: 교사 응대 평가
 - `netlify/functions/save-situation.js`: 선택한 상황 저장
 - `netlify/functions/_complaint_cases.js`: 비식별화된 민원 사례 코퍼스

@@ -73,7 +73,7 @@ export default async (req) => {
     if (body.sessionId) {
       const strengths = evaluation.perTurn.filter((t) => t.signal === "green").map((t) => t.reason).slice(0, 5);
       const improvements = evaluation.perTurn.filter((t) => t.signal !== "green").map((t) => t.alternative || t.reason).slice(0, 5);
-      await saveToSupabase("simulation_evaluations", { session_id: body.sessionId, parent_type: body.parentType, situation: body.situation, score: evaluation.score, summary: evaluation.summary, strengths, improvements, conversation: { messages: body.messages, teacherType: body.teacherType, schoolLevel: body.schoolLevel, situationContext: body.situationContext || null, criteria: evaluation.criteria, overallReview: evaluation.overallReview, strategy: evaluation.strategy, perTurn: evaluation.perTurn } });
+      await saveToSupabase("simulation_evaluations", { session_id: body.sessionId, parent_type: body.parentType, situation: body.situation, score: evaluation.score, summary: evaluation.summary, strengths, improvements, conversation: { caseId: body.caseId || null, messages: body.messages, teacherType: body.teacherType, schoolLevel: body.schoolLevel, situationContext: body.situationContext || null, criteria: evaluation.criteria, overallReview: evaluation.overallReview, strategy: evaluation.strategy, perTurn: evaluation.perTurn } });
     }
     return json(evaluation);
   } catch (error) { return errorResponse(error, "평가를 완료하지 못했습니다. 대화 기록은 그대로 남아 있으니 잠시 후 다시 시도해 주세요."); }

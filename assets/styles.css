@@ -1911,3 +1911,10 @@ textarea:focus-visible {
 .gender-toggle span { color: var(--muted); font-size: .85rem; margin-right: 4px; }
 .gender-btn { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--text); font-weight: 700; cursor: pointer; }
 .gender-btn.selected { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+.case-search { display: flex; gap: 8px; margin: 10px 0; }
+.case-search input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line); font: inherit; }
+.case-warn { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 999px; background: rgba(196, 87, 98, .12); color: var(--danger); font-size: .78rem; font-weight: 800; }
+.case-card { text-align: left; }
+.situation-page .choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 720px) { .situation-page .choice-grid { grid-template-columns: 1fr; } }
