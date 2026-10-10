@@ -1920,3 +1920,41 @@ textarea:focus-visible {
 @media (max-width: 720px) { .situation-page .choice-grid { grid-template-columns: 1fr; } }
 .case-card p { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
 .case-selected blockquote { white-space: pre-line; max-height: 50vh; overflow-y: auto; }
+
+/* ===== 시뮬레이션 화면: 한 화면 고정 레이아웃 (.sim-screen) ===== */
+.sim-screen { height: 100vh; height: 100dvh; display: flex; flex-direction: column; gap: 10px; padding: 12px clamp(12px, 2vw, 24px); box-sizing: border-box; overflow: hidden; width: min(1400px, 100%); margin: 0 auto; position: relative; }
+.sim-top { padding: 10px 14px; border-radius: 16px; display: grid; gap: 8px; flex: 0 0 auto; }
+.sim-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sim-chips, .sim-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sim-actions button { min-height: 38px; padding: 0 14px; font-size: .9rem; }
+.sim-screen .chip { padding: 5px 12px; border-radius: 999px; background: #eaf3f5; color: var(--primary-dark); font-weight: 700; font-size: .85rem; }
+.sim-screen .chip-parent { background: var(--primary); color: #fff; }
+.sim-screen .gender-toggle { margin: 0; padding: 0; border: 0; background: none; display: inline-flex; gap: 4px; }
+.sim-screen .gender-toggle > span { display: none; }
+.sim-situation { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.sit-label { flex: 0 0 auto; font-weight: 800; font-size: .82rem; color: var(--primary-dark); padding-top: 2px; }
+.sit-text { margin: 0; flex: 1 1 auto; min-width: 0; font-size: .9rem; line-height: 1.5; color: #2f3f4d; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sit-more { flex: 0 0 auto; border: 0; background: none; color: var(--primary); font-weight: 700; cursor: pointer; padding: 2px 4px; }
+.sim-tabs { display: none; gap: 8px; }
+.sim-tab { position: relative; flex: 1; min-height: 38px; border-radius: 10px; border: 1px solid var(--line); background: #fff; font-weight: 700; color: var(--primary-dark); cursor: pointer; }
+.tab-dot { position: absolute; top: 6px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: #d9534f; }
+.sim-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr); gap: 12px; }
+.sim-body.no-side { grid-template-columns: minmax(0, 1fr); }
+.sim-screen .chat-panel { min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.sim-screen .chat-history { flex: 1 1 auto; min-height: 0; height: auto; overflow-y: auto; }
+.sim-screen .input-strip { flex: 0 0 auto; }
+.sim-screen .right-panel { min-height: 0; height: 100%; overflow-y: auto; }
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(20, 30, 40, .32); z-index: 40; }
+.sheet { position: fixed; z-index: 41; left: 50%; transform: translateX(-50%); top: 120px; width: min(860px, calc(100% - 24px)); max-height: calc(100dvh - 140px); overflow-y: auto; padding: 18px 20px; border-radius: 18px; background: #fff; box-shadow: 0 18px 50px rgba(20, 30, 40, .28); }
+.sheet-x { position: sticky; top: 0; float: right; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 4px 12px; font-weight: 700; cursor: pointer; }
+.sheet .scenario-copy p { white-space: pre-wrap; line-height: 1.7; max-height: none; overflow: visible; }
+.sim-toast { position: fixed; z-index: 45; left: 50%; transform: translateX(-50%); bottom: 16px; margin: 0; box-shadow: 0 10px 30px rgba(20, 30, 40, .25); width: min(640px, calc(100% - 24px)); }
+@media (max-width: 720px) {
+  .sim-screen { padding: 8px 10px; gap: 8px; }
+  .sim-body { grid-template-columns: minmax(0, 1fr); }
+  .sim-screen .right-panel { display: none; }
+  .sim-tabs { display: flex; }
+  .sim-situation { display: none; }
+  .sim-actions button { min-height: 34px; padding: 0 10px; font-size: .82rem; }
+  .sheet { top: auto; bottom: 0; left: 0; transform: none; width: 100%; max-height: 78dvh; border-radius: 18px 18px 0 0; }
+}
