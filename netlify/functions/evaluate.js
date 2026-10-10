@@ -59,7 +59,7 @@ export default async (req) => {
     const exitNote = endedEarly
       ? `[대화 종료 방식] 학부모의 요구가 해결되지 않은 채 교사가 대화를 종료했습니다(중도 종료). 미해결 요구: ${openIssuesAtExit.length ? openIssuesAtExit.join("; ") : "기록 없음"}. 이 점을 총평에 반영하세요.`
       : `[대화 종료 방식] 대화가 자연스럽게 마무리되었습니다.`;
-    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: ${body.schoolLevel || "미선택"}\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}${exitNote}\n\n대화 기록:\n${convo}`;
+    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: 초등학교\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}${exitNote}\n\n대화 기록:\n${convo}`;
     const model = getEnv("OPENAI_PRIMARY_EVAL_MODEL") || "gpt-4.1-mini";
     const raw = await createWithFallback({ model, reasoningEffort: "low", system, input: context, maxOutputTokens: 3400, responseFormat: buildResponseFormat(teacherTurns.length), timeoutMs: evalTimeout() }, "gpt-4.1-mini");
     const evaluation = JSON.parse(raw);
