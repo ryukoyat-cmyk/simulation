@@ -1918,3 +1918,5 @@ textarea:focus-visible {
 .case-card { text-align: left; }
 .situation-page .choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 720px) { .situation-page .choice-grid { grid-template-columns: 1fr; } }
+.case-card p { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.case-selected blockquote { white-space: pre-line; max-height: 50vh; overflow-y: auto; }
