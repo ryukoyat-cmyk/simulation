@@ -26,9 +26,9 @@ const GENDERS = [
 // 난이도는 상황 정보량이 아니라(민원 상황은 항상 전체를 보여 줍니다) 학부모 발화 텍스트 노출,
 // 즉시 피드백 제공 여부, 응대 참고 카드 노출 방식을 통제합니다.
 const DIFFICULTIES = [
-  { id: "basic", icon: "🌱", label: "기초", desc: "학부모 말이 음성과 함께 글로도 보이고, 즉시 피드백과 응대 참고 카드가 항상 열려 있습니다." },
-  { id: "standard", icon: "🎯", label: "기본", desc: "학부모 말은 음성으로만 나오고, 즉시 피드백은 계속 제공됩니다. 응대 참고 카드는 필요할 때 펼쳐 볼 수 있습니다." },
-  { id: "advanced", icon: "🔥", label: "심화", desc: "학부모 말은 음성으로만 나오고, 즉시 피드백과 응대 참고 카드 없이 실전처럼 연습합니다." }
+  { id: "basic", icon: "🌱", label: "기초", tagline: "보면서 배운다", perks: [["학부모 말 글로 보기", "on"], ["즉시 피드백", "on"], ["응대 참고 카드", "항상 열림"]] },
+  { id: "standard", icon: "🎯", label: "기본", tagline: "듣고 대응한다", perks: [["학부모 말 글로 보기", "off"], ["즉시 피드백", "on"], ["응대 참고 카드", "필요할 때"]] },
+  { id: "advanced", icon: "🔥", label: "심화", tagline: "실전처럼", perks: [["학부모 말 글로 보기", "off"], ["즉시 피드백", "off"], ["응대 참고 카드", "off"]] }
 ];
 const footer = `<footer class="copyright"><strong>© 2026 박재윤. All Rights Reserved.</strong><span>예비교원의 학부모 민원 대응 역량 강화를 위한 AI 기반 시뮬레이션</span></footer>`;
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -71,8 +71,14 @@ function renderParent() { selectionPage({ step: "02/04", title: "학부모 유�
 
 // 텍스트 카드용 선택 화면입니다. selectionPage()는 이미지 카드 전용이라
 // 성별·난이도처럼 사진이 없는 선택지에는 이 함수를 씁니다. 클릭 즉시 다음 화면으로 넘어갑니다.
-function textChoicePage({ step, title, help, items, current, onPick, back, next }) {
-  app.innerHTML = `<main class="page"><section class="page-center selection-page"><p class="step-index">STEP ${step}</p><h2 class="step-title">${title}</h2>${help ? `<p class="step-copy">${help}</p>` : ""}<div class="text-choice-grid">${items.map((item) => `<button class="text-choice ${current === item.id ? "selected" : ""}" data-id="${item.id}" type="button"><span class="text-choice-icon">${item.icon}</span><strong>${esc(item.label)}</strong><p>${esc(item.desc)}</p></button>`).join("")}</div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button></div>${footer}</section></main>`;
+function perkList(perks) {
+  return `<ul class="perk-list">${perks.map(([label, value]) => {
+    const mark = value === "on" ? `<b class="perk-on" aria-label="제공">✓</b>` : value === "off" ? `<b class="perk-off" aria-label="없음">—</b>` : `<b class="perk-text">${esc(value)}</b>`;
+    return `<li><span>${esc(label)}</span>${mark}</li>`;
+  }).join("")}</ul>`;
+}
+function textChoicePage({ step, title, help, items, current, onPick, back, next, gridClass = "" }) {
+  app.innerHTML = `<main class="page"><section class="page-center selection-page"><p class="step-index">STEP ${step}</p><h2 class="step-title">${title}</h2>${help ? `<p class="step-copy">${help}</p>` : ""}<div class="text-choice-grid ${gridClass}">${items.map((item) => `<button class="text-choice ${current === item.id ? "selected" : ""}" data-id="${item.id}" type="button"><span class="text-choice-icon">${item.icon}</span><strong>${esc(item.label)}</strong>${item.tagline ? `<span class="text-choice-tagline">${esc(item.tagline)}</span>${perkList(item.perks)}` : `<p>${esc(item.desc)}</p>`}</button>`).join("")}</div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button></div>${footer}</section></main>`;
   document.querySelectorAll(".text-choice").forEach((el) => el.onclick = () => { onPick(el.dataset.id); next(); });
   $("back").onclick = back;
 }
@@ -81,8 +87,9 @@ function renderDifficulty() {
   textChoicePage({
     step: "03/04",
     title: "연습 난이도를 선택해 주세요",
-    help: "민원 상황은 어떤 난이도에서도 항상 전체가 보입니다. 난이도는 학부모 말이 글로도 보이는지, 즉시 피드백과 응대 참고 카드를 함께 볼 수 있는지를 정합니다.",
+    help: "민원 상황은 항상 전체가 보입니다. 아래 도움만 달라집니다.",
     items: DIFFICULTIES,
+    gridClass: "difficulty-grid",
     current: S.difficulty,
     onPick: (id) => { S.difficulty = id; },
     back: () => { S.screen = "parent"; render(); },
