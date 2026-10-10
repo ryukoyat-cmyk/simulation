@@ -1973,7 +1973,3 @@ textarea:focus-visible {
 .sim-actions button, .sim-tab { min-width: 0; }
 .sim-tabs { width: 100%; }
 @media (max-width: 720px) { .sim-actions button { font-size: .78rem; } }
-.voice-pick { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 18px; flex-wrap: wrap; }
-.voice-pick > span { font-weight: 700; color: var(--primary-dark); }
-.voice-pick .gender-toggle { margin: 0; }
-.voice-pick .gender-btn { padding: 8px 20px; }

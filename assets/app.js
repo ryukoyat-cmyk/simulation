@@ -18,7 +18,7 @@ const PARENTS = [
   { id: "pressure", label: "압박형", stars: 3, quote: "오늘 안에 답을 듣고 싶습니다. 이대로는 절대 그냥 넘어갈 수 없어요.", image: "assets/personas/pressure.webp", desc: "즉각적인 해결을 강하게 요구하며 초반 감정 강도가 매우 높습니다.", persona: { concern: "문제가 단 1분도 지연되지 않고 지금 이 자리에서 책임 있게 처리되는 것", emotion: "초반부터 화가 잔뜩 난 상태로 시작하며, 말이 빠르고 언성이 높으며 상대의 말을 자주 끊는다", style: "‘오늘 안에 답을 듣고 싶습니다.’, ‘이대로는 절대 그냥 넘어갈 수 없어요.’, ‘지금 당장 책임자 바꿔 주세요.’처럼 몰아붙이듯 강하게 요구한다", questions: "즉시 조치, 책임자, 공식 민원·보고 경로를 다그치듯 빠르게 묻는다", repeat: "답변이 조금이라도 늦거나 모호하면 같은 요구를 더 크고 강하게 반복하며 몰아붙인다", escalate: "방어적 반박, 감정 맞대응, 무리한 약속, 절차 없는 지연, 조금이라도 미루는 듯한 말투", settle: "차분한 경청과 사실 확인, 명확한 경계, 공식 보고·회신 절차를 정중하지만 단호하게 제시할 때만", boundaries: "욕설·직접적 협박은 하지 않지만 그 직전까지 강하게 압박한다. 교사가 정중하고 단호하게 한계를 알리면 강도를 낮추고 공식 절차로 전환한다", closing: "즉시 해결이 불가해도 담당자와 회신 시점이 명확하면 마지못해 조건부로 마무리한다" } }
 ];
 const TEACHERS = [{ id: "preservice", label: "예비교원", image: "assets/cards/preservice.svg", detail: "교직 진입 전 민원 대응의 기본 언어와 절차를 연습합니다." }, { id: "inservice", label: "현직교원", image: "assets/cards/inservice.svg", detail: "학교 맥락의 대응 범위와 협업 절차를 점검합니다." }];
-// 성별은 말투·태도가 아니라 호칭과 음색만 바꿉니다. 시뮬레이션 화면에서 바로 바꿀 수 있습니다.
+// 성별은 말투·태도가 아니라 호칭과 음색만 바꿉니다. 02단계에서 고르면 시뮬레이션 중에는 바꿀 수 없습니다.
 const GENDERS = [
   { id: "mother", label: "여성", honorific: "어머니", voice: "coral", gender: "female" },
   { id: "father", label: "남성", honorific: "아버지", voice: "onyx", gender: "male" }
@@ -43,7 +43,7 @@ const teacherTurns = () => S.msgs.filter((x) => x.role === "teacher").length;
 
 function systemPrompt() { const p = parent().persona, c = caller(); return `당신은 학부모 민원 대응 연습의 AI 학부모입니다. 사용자는 항상 교사 역할입니다. 당신은 언제나 학부모 역할만 유지합니다. 절대로 교사가 되거나, 교사에게 조언·평가·수업지시·역할 안내를 하지 마세요. 사과나 해결 약속도 학부모의 관점에서만 말하세요.\n\n[상황]\n교원 유형: ${teacher()?.label || "미선택"}\n학교급: 초등학교\n민원 상황: ${S.situation}\n상세 맥락: ${S.situationContext || S.situation}\n\n[선택된 학부모 유형: ${parent().label}]\n- 핵심 관심사: ${p.concern}\n- 감정 강도: ${p.emotion}\n- 자주 쓰는 말투: ${p.style}\n- 질문 방식: ${p.questions}\n- 반복 행동: ${p.repeat}\n- 갈등 고조 조건: ${p.escalate}\n- 안정 조건: ${p.settle}\n- 허용·비허용 표현 및 경계 반응: ${p.boundaries}\n- 대화 종료 반응: ${p.closing}\n\n[민원을 제기하는 사람]\n- 호칭: ${c.honorific} (자신을 소개할 때 이 호칭을 씁니다)\n\n[공통 대화 원칙]\n- 민원 상황에서 벗어나지 않습니다.\n- 실제 학부모처럼 2~5문장으로 반응하고, 바로 직전 교사 발화의 구체 내용을 반영합니다.\n- 반드시 교사에게 직접 말하는 1인칭 발화로만 답합니다. '학부모는', '학부모가', '상황은' 같은 해설문을 쓰지 않습니다.\n- 첫 발화부터 ${parent().label}의 말투, 감정 강도, 질문 방식이 분명하게 드러나야 합니다.\n- 욕설·협박·혐오 표현은 생성하지 않습니다. 압박형도 정중한 경계와 공식 절차 안내에 반응 강도를 낮춥니다.\n- 교사가 감정을 인정하고, 사실을 확인하며, 가능한 범위·후속 절차·경계를 명료하게 설명하면 그에 맞게 안정됩니다.`; }
 
-function render() { ({ title: renderTitle, teacher: renderTeacher, parent: renderParent, difficulty: renderDifficulty, situation: renderSituation, simulation: renderSimulation, result: renderResult }[S.screen] || renderTitle)(); }
+function render() { ({ title: renderTitle, teacher: renderTeacher, voice: renderVoice, parent: renderParent, difficulty: renderDifficulty, situation: renderSituation, simulation: renderSimulation, result: renderResult }[S.screen] || renderTitle)(); }
 function renderTitle() { app.innerHTML = `<main class="page title-page"><section class="title-shell"><div class="title-hero"><p class="eyebrow">TEACHER PRACTICE LAB</p><h1 class="app-title">학부모 민원 대응<br>음성 시뮬레이션</h1><p class="app-subtitle">안전한 가상 대화에서 민원 대응을 연습하고, 대화 과정을 성찰해 보세요.</p><button class="btn-primary" id="start">시작하기</button></div><article class="privacy-card title-notice glass"><h2>연구 참여 및 개인정보 안내</h2><div class="privacy-lines"><p>기본 입력은 음성 또는 텍스트이며, 음성 원본은 저장하지 않습니다.</p><p>대화 내용과 AI 평가 결과는 연구 및 시스템 개선 자료로 활용될 수 있습니다.</p><p>실제 학생·학부모·교직원 이름, 연락처, 학교명 등 개인정보는 입력하지 마세요.</p><p>AI 평가는 학습 피드백이며 객관적 역량 판정이 아닙니다.</p></div></article>${footer}</section></main>`; $("start").onclick = () => { S.screen = "teacher"; render(); }; }
 // 학부모 유형 카드는 설명 대신 대표 대사 한 줄 + 별점으로 유형을 전달합니다.
 function stars(n) { return "★".repeat(n) + "☆".repeat(3 - n); }
@@ -56,23 +56,19 @@ function card(item, type, selected) {
 }
 // 카드를 고르면 바로 다음 화면으로 넘어갑니다. 확인 버튼을 없애 클릭 한 번을 줄입니다.
 // "뒤로"는 남겨 두어 실수로 고른 경우 되돌아갈 수 있게 합니다.
-function selectionPage({ step, title, items, current, type, back, next, extra = "" }) {
+function selectionPage({ step, title, items, current, type, back, next }) {
   const gridClass = type === "parent" ? "parent-choice-grid" : "";
-  app.innerHTML = `<main class="page"><section class="page-center selection-page"><p class="step-index">STEP ${step}</p><h2 class="step-title">${title}</h2>${extra}<div class="image-choice-grid ${gridClass}">${items.map((item) => card(item, type, current === item.id)).join("")}</div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button></div>${footer}</section></main>`;
+  app.innerHTML = `<main class="page"><section class="page-center selection-page"><p class="step-index">STEP ${step}</p><h2 class="step-title">${title}</h2><div class="image-choice-grid ${gridClass}">${items.map((item) => card(item, type, current === item.id)).join("")}</div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button></div>${footer}</section></main>`;
   document.querySelectorAll(".image-choice").forEach((el) => el.onclick = () => {
     if (type === "teacher") S.teacherType = el.dataset.id;
     if (type === "parent") S.parentId = el.dataset.id;
     next();
   });
-  document.querySelectorAll(".voice-pick .gender-btn").forEach((el) => el.onclick = () => {
-    S.gender = el.dataset.gender;
-    document.querySelectorAll(".voice-pick .gender-btn").forEach((b) => { const on = b === el; b.classList.toggle("selected", on); b.setAttribute("aria-pressed", String(on)); });
-  });
   $("back").onclick = back;
 }
-const voicePicker = () => `<div class="voice-pick"><span>학부모 목소리</span><div class="gender-toggle" role="group" aria-label="학부모 목소리 선택">${GENDERS.map((g) => `<button type="button" class="gender-btn ${S.gender === g.id ? "selected" : ""}" data-gender="${g.id}" aria-pressed="${S.gender === g.id}">${g.label}</button>`).join("")}</div></div>`;
-function renderTeacher() { selectionPage({ step: "01/04", title: "현재 해당하는 항목을 선택해 주세요", items: TEACHERS, current: S.teacherType, type: "teacher", back: () => { S.screen = "title"; render(); }, next: () => { S.screen = "parent"; render(); } }); }
-function renderParent() { selectionPage({ step: "02/04", title: "학부모 유형을 선택해 주세요", extra: voicePicker(), items: PARENTS, current: S.parentId, type: "parent", back: () => { S.screen = "teacher"; render(); }, next: () => { S.screen = "difficulty"; render(); } }); }
+function renderTeacher() { selectionPage({ step: "01/05", title: "현재 해당하는 항목을 선택해 주세요", items: TEACHERS, current: S.teacherType, type: "teacher", back: () => { S.screen = "title"; render(); }, next: () => { S.screen = "voice"; render(); } }); }
+function renderVoice() { textChoicePage({ step: "02/05", title: "학부모 목소리를 선택해 주세요", help: "대화 중에는 바꿀 수 없습니다. 선택한 목소리와 호칭으로 시뮬레이션이 진행됩니다.", items: GENDERS.map((g) => ({ id: g.id, icon: g.gender === "female" ? "👩" : "👨", label: g.label + " 학부모", desc: g.gender === "female" ? "여성 목소리로 말합니다." : "남성 목소리로 말합니다." })), current: S.gender, onPick: (id) => { S.gender = id; }, back: () => { S.screen = "teacher"; render(); }, next: () => { S.screen = "parent"; render(); } }); }
+function renderParent() { selectionPage({ step: "03/05", title: "학부모 유형을 선택해 주세요", items: PARENTS, current: S.parentId, type: "parent", back: () => { S.screen = "voice"; render(); }, next: () => { S.screen = "difficulty"; render(); } }); }
 
 // 텍스트 카드용 선택 화면입니다. selectionPage()는 이미지 카드 전용이라
 // 성별·난이도처럼 사진이 없는 선택지에는 이 함수를 씁니다. 클릭 즉시 다음 화면으로 넘어갑니다.
@@ -84,7 +80,7 @@ function textChoicePage({ step, title, help, items, current, onPick, back, next 
 
 function renderDifficulty() {
   textChoicePage({
-    step: "03/04",
+    step: "04/05",
     title: "연습 난이도를 선택해 주세요",
     help: "민원 상황은 어떤 난이도에서도 항상 전체가 보입니다. 난이도는 학부모 말이 글로도 보이는지, 즉시 피드백과 응대 참고 카드를 함께 볼 수 있는지를 정합니다.",
     items: DIFFICULTIES,
@@ -109,7 +105,7 @@ function renderSituation() {
   const mode = S.situationMode || "case";
   const current = currentSituationText();
   const casePanel = `<section class="choice-panel glass ${mode === "case" ? "selected" : ""}"><div class="choice-head"><h3>실제 사례 뽑기</h3><button class="mode-button" id="caseMode" type="button">선택</button></div><p class="choice-help">실제 학부모 민원 사례집에서 원문 그대로 무작위로 뽑습니다. 실제 폭언 표현이 포함될 수 있습니다.</p>${mode === "case" ? renderCaseBrowser() : ""}</section>`;
-  app.innerHTML = `<main class="page"><section class="page-center situation-page"><p class="step-index">STEP 04/04</p><h2 class="step-title">민원 상황을 선택해 주세요</h2><p class="step-copy">실제 사례를 뽑아 연습하거나, 연습할 상황을 직접 입력할 수 있습니다.</p><div class="choice-grid">${casePanel}<section class="choice-panel glass ${mode === "manual" ? "selected" : ""}"><div class="choice-head"><h3>직접 입력하기</h3><button class="mode-button" id="manualMode" type="button">선택</button></div><p class="choice-help">개인정보를 제외한 가상 상황만 입력해 주세요.</p><textarea id="manualInput" class="situation-textarea" placeholder="연습할 민원 상황을 입력해 주세요. (개인정보는 절대 입력하지 마세요)">${esc(S.manualSituation)}</textarea></section></div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button><button class="btn-primary" id="next" ${current.trim() ? "" : "disabled"}>대화 시작</button></div>${footer}</section></main>`;
+  app.innerHTML = `<main class="page"><section class="page-center situation-page"><p class="step-index">STEP 05/05</p><h2 class="step-title">민원 상황을 선택해 주세요</h2><p class="step-copy">실제 사례를 뽑아 연습하거나, 연습할 상황을 직접 입력할 수 있습니다.</p><div class="choice-grid">${casePanel}<section class="choice-panel glass ${mode === "manual" ? "selected" : ""}"><div class="choice-head"><h3>직접 입력하기</h3><button class="mode-button" id="manualMode" type="button">선택</button></div><p class="choice-help">개인정보를 제외한 가상 상황만 입력해 주세요.</p><textarea id="manualInput" class="situation-textarea" placeholder="연습할 민원 상황을 입력해 주세요. (개인정보는 절대 입력하지 마세요)">${esc(S.manualSituation)}</textarea></section></div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button><button class="btn-primary" id="next" ${current.trim() ? "" : "disabled"}>대화 시작</button></div>${footer}</section></main>`;
   $("manualMode").onclick = () => { S.situationMode = "manual"; renderSituation(); };
   $("caseMode").onclick = () => { S.situationMode = "case"; if (!S.caseList.length && !S.selectedCase) drawCases(); else renderSituation(); };
   $("manualInput").oninput = (e) => { S.situationMode = "manual"; S.manualSituation = e.target.value; $("next").disabled = !e.target.value.trim(); };
