@@ -22,6 +22,20 @@ const geminiStyleByPersona = {
   demanding: "firmly and crisply, in a logical tone, pausing between each demand",
   pressure: "angrily, fast and sharp, with a raised voice and hard stops at the end of sentences"
 };
+// 한 통화의 모든 발화가 같은 사람처럼 들리도록, 발화마다 달라지는 것은 대사뿐이고 인물 설정·속도는 고정합니다.
+const geminiPaceByPersona = { cooperative: "moderate and steady", anxious: "slightly slow with small hesitations", avoidant: "slow and flat with short pauses", demanding: "measured and crisp", pressure: "fast and clipped" };
+function geminiPrompt({ gender, style, parentId, text }) {
+  const who = gender === "male" ? "a father in his early 40s" : "a mother in her early 40s";
+  const pace = geminiPaceByPersona[parentId] || geminiPaceByPersona.cooperative;
+  return `# AUDIO PROFILE
+${who}, speaking standard Seoul Korean on a phone call with his or her child's elementary school teacher. Keep exactly the same voice identity, pitch range, accent and speaking pace in every line of this call.
+## DIRECTOR'S NOTES
+Style: ${style}
+Pace: ${pace}
+Never read these notes aloud and never add words that are not in the transcript.
+#### TRANSCRIPT
+${text}`;
+}
 // 오디션 페이지에서 고를 수 있는 Gemini 음성 이름입니다. 최종 기본값은 환경변수로 정합니다.
 export const GEMINI_VOICES = ["Kore", "Aoede", "Leda", "Zephyr", "Callirrhoe", "Charon", "Orus", "Fenrir", "Puck", "Algieba"];
 const GEMINI_DEFAULT_VOICE = { female: "Kore", male: "Orus" };
@@ -34,16 +48,22 @@ export default async (req) => {
   if (!text) return json({ error: "text is required" }, 400);
 
   // Gemini 키가 있으면 먼저 시도하고, 없거나 실패하면 아래 OpenAI 경로로 넘어갑니다.
-  const gemini = await tryGemini({ text, body });
-  if (gemini?.audio) return json(gemini);
-  const geminiError = gemini?.error;
+  // 클라이언트가 openai로 고정했다면(같은 통화에서 목소리가 바뀌지 않게) Gemini를 건너뜁니다.
+  // Gemini가 일시 오류로 실패하면 다른 목소리로 바꾸기 전에 한 번 더 시도합니다.
+  let geminiError;
+  if (String(body?.provider || "") !== "openai") {
+    let gemini = await tryGemini({ text, body });
+    if (!gemini?.audio && gemini?.retryable) gemini = await tryGemini({ text, body });
+    if (gemini?.audio) return json(gemini);
+    geminiError = gemini?.error;
+  }
 
   const apiKey = getEnv("OPENAI_API_KEY");
   if (!apiKey) return json({ error: "OPENAI_API_KEY is not configured." }, 500);
 
   const model = getEnv("OPENAI_TTS_MODEL") || "gpt-4o-mini-tts";
   const voice = String(body?.voice || getEnv("OPENAI_TTS_VOICE") || "coral");
-  const instructions = deliveryByPersona[String(body?.parentId || "")] || deliveryByPersona.cooperative;
+  const instructions = (deliveryByPersona[String(body?.parentId || "")] || deliveryByPersona.cooperative) + ` 40대 초반 ${body?.gender === "male" ? "아버지" : "어머니"}의 목소리이며, 한 통화 동안 같은 사람처럼 같은 음높이와 속도를 유지합니다.`;
 
   try {
     let result = await requestSpeech({ apiKey, model, voice, text, instructions });
@@ -80,7 +100,7 @@ async function tryGemini({ text, body }) {
         method: "POST",
         headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Say in Korean, ${style}: ${text}` }] }],
+          contents: [{ parts: [{ text: geminiPrompt({ gender, style, parentId: String(body?.parentId || ""), text }) }] }],
           generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } } }
         }),
         signal: controller.signal
@@ -91,7 +111,7 @@ async function tryGemini({ text, body }) {
         console.error("Gemini TTS failed:", lastError);
         // 모델 이름 문제(404)만 다음 후보로 넘어가고, 키·할당량·형식 문제는 바로 중단합니다.
         if (res.status === 404) continue;
-        return { error: lastError };
+        return { error: lastError, retryable: res.status >= 500 };
       }
       const data = await res.json();
       const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
@@ -102,7 +122,7 @@ async function tryGemini({ text, body }) {
     } catch (error) {
       lastError = `${model}: ${error?.name === "AbortError" ? "timeout" : error?.message}`;
       console.error("Gemini TTS error:", lastError);
-      return { error: lastError };
+      return { error: lastError, retryable: true };
     } finally {
       clearTimeout(timer);
     }

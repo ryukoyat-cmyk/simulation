@@ -46,7 +46,7 @@ export default async (req) => {
   const body = await readJson(req);
   if (!Array.isArray(body?.messages) || !body.parentType || !body.situation) return json({ error: "messages, parentType, and situation are required" }, 400);
   const teacherTurns = body.messages.filter((m) => m.role === "teacher");
-  if (teacherTurns.length < 4) return json({ error: "교사 발화가 4회 이상이어야 평가할 수 있습니다." }, 400);
+  if (teacherTurns.length < 1) return json({ error: "교사 발화가 1회 이상 있어야 평가할 수 있습니다." }, 400);
   try {
     // 시스템 안내 메시지("AI 발화 생성에 실패해…" 등)는 교사·학부모 발화가 아니므로
     // 대화 기록에서 빼야 합니다. 섞이면 모델이 세는 교사 발화 수가 실제와 달라져
@@ -59,7 +59,9 @@ export default async (req) => {
     const exitNote = endedEarly
       ? `[대화 종료 방식] 학부모의 요구가 해결되지 않은 채 교사가 대화를 종료했습니다(중도 종료). 미해결 요구: ${openIssuesAtExit.length ? openIssuesAtExit.join("; ") : "기록 없음"}. 이 점을 총평에 반영하세요.`
       : `[대화 종료 방식] 대화가 자연스럽게 마무리되었습니다.`;
-    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: 초등학교\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}${exitNote}\n\n대화 기록:\n${convo}`;
+    // 교사가 아무 때나 종료할 수 있으므로 짧은 대화는 관찰된 요소만 평가하게 합니다.
+    const shortNote = teacherTurns.length < 4 ? `\n[짧은 대화] 교사 발화가 ${teacherTurns.length}회뿐입니다. 관찰되지 않은 요소는 applicable:false로 두고 점수를 억지로 매기지 마세요. 총평에는 대화가 짧아 평가 근거가 제한적이라는 점을 한 문장 밝혀 주세요.` : "";
+    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: 초등학교\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}${exitNote}${shortNote}\n\n대화 기록:\n${convo}`;
     const model = getEnv("OPENAI_PRIMARY_EVAL_MODEL") || "gpt-4.1-mini";
     const raw = await createWithFallback({ model, reasoningEffort: "low", system, input: context, maxOutputTokens: 3400, responseFormat: buildResponseFormat(teacherTurns.length), timeoutMs: evalTimeout() }, "gpt-4.1-mini");
     const evaluation = JSON.parse(raw);
