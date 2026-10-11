@@ -1973,3 +1973,23 @@ textarea:focus-visible {
 .sim-actions button, .sim-tab { min-width: 0; }
 .sim-tabs { width: 100%; }
 @media (max-width: 720px) { .sim-actions button { font-size: .78rem; } }
+
+/* ===== 학부모 유형 화면 (성별별 장면 이미지 + 대사 + 설명) ===== */
+.parent-page { min-height: 0; height: 100vh; height: 100dvh; padding: 0; overflow: hidden; }
+.parent-screen { height: 100%; width: min(1200px, 100%); margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: clamp(6px, 1.4vh, 14px); padding: clamp(10px, 2vh, 22px) clamp(12px, 2vw, 24px); box-sizing: border-box; }
+.parent-screen .step-index, .parent-screen .step-title { margin: 0; flex: 0 0 auto; }
+.parent-screen .step-title { font-size: clamp(1.4rem, 3.4vh, 2.2rem); text-align: center; }
+.parent-screen .btn-row { flex: 0 0 auto; margin: 0; }
+.parent-scroll { flex: 1 1 auto; min-height: 0; width: 100%; overflow-y: auto; display: flex; align-items: center; justify-content: center; }
+.parent-grid { width: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(8px, 1.4vh, 16px); margin: auto 0; }
+.persona-card { width: calc(33.333% - 11px); display: flex; flex-direction: column; text-align: left; padding: 0; border: 2px solid var(--line); border-radius: 20px; background: #fff; overflow: hidden; cursor: pointer; font: inherit; color: inherit; transition: transform .15s, box-shadow .15s, border-color .15s; }
+.persona-card:hover, .persona-card.selected { border-color: var(--primary); box-shadow: 0 10px 28px rgba(36, 107, 122, .22); transform: translateY(-2px); }
+.persona-img { display: block; height: clamp(70px, 16.5vh, 200px); background: #f6efe6; }
+.persona-img img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 12%; }
+.persona-body { display: grid; gap: 4px; padding: 8px 16px 12px; }
+.persona-head { display: flex; align-items: center; gap: 10px; }
+.persona-head strong { font-size: clamp(1.15rem, 2.6vh, 1.4rem); color: var(--primary); margin: 0; }
+.persona-head .parent-stars { margin: 0; font-size: 1.05rem; }
+.persona-quote { font-style: italic; color: #2f4252; font-size: clamp(.95rem, 2.1vh, 1.05rem); line-height: 1.45; }
+.persona-desc { color: var(--muted); font-size: clamp(.9rem, 1.9vh, .98rem); line-height: 1.5; }
+@media (max-width: 900px) { .persona-card { width: calc(50% - 6px); } .persona-img { height: clamp(90px, 15vh, 160px); } .persona-body { padding: 8px 10px 12px; } .persona-quote { font-size: .92rem; } .persona-desc { font-size: .88rem; } .parent-scroll { align-items: flex-start; } }
