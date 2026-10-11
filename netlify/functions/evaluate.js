@@ -59,7 +59,7 @@ export default async (req) => {
     const exitNote = endedEarly
       ? `[대화 종료 방식] 학부모의 요구가 해결되지 않은 채 교사가 대화를 종료했습니다(중도 종료). 미해결 요구: ${openIssuesAtExit.length ? openIssuesAtExit.join("; ") : "기록 없음"}. 이 점을 총평에 반영하세요.`
       : `[대화 종료 방식] 대화가 자연스럽게 마무리되었습니다.`;
-    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: ${body.schoolLevel || "미선택"}\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}${exitNote}\n\n대화 기록:\n${convo}`;
+    const context = `교원 유형: ${body.teacherType || "미선택"}\n학교급: 초등학교\n학부모 유형: ${body.parentType}\n상황: ${body.situation}\n${body.situationContext ? `상황 상세: ${body.situationContext}\n` : ""}${exitNote}\n\n대화 기록:\n${convo}`;
     const model = getEnv("OPENAI_PRIMARY_EVAL_MODEL") || "gpt-4.1-mini";
     const raw = await createWithFallback({ model, reasoningEffort: "low", system, input: context, maxOutputTokens: 3400, responseFormat: buildResponseFormat(teacherTurns.length), timeoutMs: evalTimeout() }, "gpt-4.1-mini");
     const evaluation = JSON.parse(raw);
@@ -73,7 +73,7 @@ export default async (req) => {
     if (body.sessionId) {
       const strengths = evaluation.perTurn.filter((t) => t.signal === "green").map((t) => t.reason).slice(0, 5);
       const improvements = evaluation.perTurn.filter((t) => t.signal !== "green").map((t) => t.alternative || t.reason).slice(0, 5);
-      await saveToSupabase("simulation_evaluations", { session_id: body.sessionId, parent_type: body.parentType, situation: body.situation, score: evaluation.score, summary: evaluation.summary, strengths, improvements, conversation: { messages: body.messages, teacherType: body.teacherType, schoolLevel: body.schoolLevel, situationContext: body.situationContext || null, criteria: evaluation.criteria, overallReview: evaluation.overallReview, strategy: evaluation.strategy, perTurn: evaluation.perTurn } });
+      await saveToSupabase("simulation_evaluations", { session_id: body.sessionId, parent_type: body.parentType, situation: body.situation, score: evaluation.score, summary: evaluation.summary, strengths, improvements, conversation: { caseId: body.caseId || null, messages: body.messages, teacherType: body.teacherType, schoolLevel: body.schoolLevel, situationContext: body.situationContext || null, criteria: evaluation.criteria, overallReview: evaluation.overallReview, strategy: evaluation.strategy, perTurn: evaluation.perTurn } });
     }
     return json(evaluation);
   } catch (error) { return errorResponse(error, "평가를 완료하지 못했습니다. 대화 기록은 그대로 남아 있으니 잠시 후 다시 시도해 주세요."); }

@@ -14,12 +14,28 @@ const deliveryByPersona = {
     "다만 욕설이나 실제 위협이 되는 말은 하지 않습니다."
 };
 
+// Gemini TTS는 말투를 영어 지시문으로 주는 쪽이 안정적이라 유형별 연기 지시를 따로 둡니다.
+const geminiStyleByPersona = {
+  cooperative: "politely and calmly, like a courteous middle-aged parent, speaking clearly",
+  anxious: "in a worried, hesitant, slightly trembling voice, a bit slowly",
+  avoidant: "in a low, flat, guarded tone with short phrases and emotional distance",
+  demanding: "firmly and crisply, in a logical tone, pausing between each demand",
+  pressure: "angrily, fast and sharp, with a raised voice and hard stops at the end of sentences"
+};
+// 오디션 페이지에서 고를 수 있는 Gemini 음성 이름입니다. 최종 기본값은 환경변수로 정합니다.
+export const GEMINI_VOICES = ["Kore", "Aoede", "Leda", "Zephyr", "Callirrhoe", "Charon", "Orus", "Fenrir", "Puck", "Algieba"];
+const GEMINI_DEFAULT_VOICE = { female: "Kore", male: "Orus" };
+
 export default async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const body = await readJson(req);
   const text = String(body?.text || "").trim().slice(0, MAX_INPUT_CHARS);
   if (!text) return json({ error: "text is required" }, 400);
+
+  // Gemini 키가 있으면 먼저 시도하고, 없거나 실패하면 아래 OpenAI 경로로 넘어갑니다.
+  const gemini = await tryGemini({ text, body });
+  if (gemini) return json(gemini);
 
   const apiKey = getEnv("OPENAI_API_KEY");
   if (!apiKey) return json({ error: "OPENAI_API_KEY is not configured." }, 500);
@@ -40,6 +56,51 @@ export default async (req) => {
     return errorResponse(error, "학부모 음성을 합성하지 못했습니다.");
   }
 };
+
+async function tryGemini({ text, body }) {
+  const key = getEnv("GEMINI_API_KEY");
+  if (!key) return null;
+  const gender = body?.gender === "male" ? "male" : "female";
+  const requested = String(body?.geminiVoice || "");
+  const voiceName = GEMINI_VOICES.includes(requested) ? requested : (getEnv(gender === "male" ? "GEMINI_TTS_VOICE_MALE" : "GEMINI_TTS_VOICE_FEMALE") || GEMINI_DEFAULT_VOICE[gender]);
+  const style = geminiStyleByPersona[String(body?.parentId || "")] || geminiStyleByPersona.cooperative;
+  const model = getEnv("GEMINI_TTS_MODEL") || "gemini-2.5-flash-preview-tts";
+  const timeoutMs = Number(getEnv("GEMINI_TIMEOUT_MS")) || 8000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `Say in Korean, ${style}: ${text}` }] }],
+        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } } }
+      }),
+      signal: controller.signal
+    });
+    if (!res.ok) { console.error("Gemini TTS failed:", res.status, (await res.text()).slice(0, 300)); return null; }
+    const data = await res.json();
+    const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+    if (!part) { console.error("Gemini TTS returned no audio"); return null; }
+    const wav = pcmToWav(Buffer.from(part.inlineData.data, "base64"), 24000);
+    return { audio: wav.toString("base64"), mime: "audio/wav", provider: "gemini", voice: voiceName };
+  } catch (error) {
+    console.error("Gemini TTS error:", error?.name === "AbortError" ? "timeout" : error?.message);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Gemini는 헤더 없는 16비트 모노 PCM을 돌려주므로 브라우저가 재생할 수 있게 WAV 헤더를 붙입니다.
+export function pcmToWav(pcm, sampleRate) {
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0); header.writeUInt32LE(36 + pcm.length, 4); header.write("WAVE", 8);
+  header.write("fmt ", 12); header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24); header.writeUInt32LE(sampleRate * 2, 28); header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34);
+  header.write("data", 36); header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
 
 async function requestSpeech({ apiKey, model, voice, text, instructions }) {
   const timeoutMs = Number(getEnv("OPENAI_TIMEOUT_MS")) || 25000;
