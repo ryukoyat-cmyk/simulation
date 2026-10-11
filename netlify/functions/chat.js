@@ -99,7 +99,7 @@ export default async (req) => {
         situationContext,
         teacherType: String(body.teacherType || ""),
         schoolLevel: String(body.schoolLevel || ""),
-        callerHonorific: String(body.callerHonorific || "")
+        callerHonorific: String(body.callerSelf || body.callerHonorific || "")
       });
       if (body.sessionId) {
         await saveToSupabase("simulation_messages", {
@@ -242,6 +242,8 @@ ${SITUATION_RULES}
 - 2~3문장으로 짧게 말합니다. 한 문장을 길게 늘이지 마세요.
 - 교사에게 직접 말하는 1인칭으로만 씁니다. 자녀는 "금쪽이"로 부릅니다.
 - 첫 문장부터 ${parentType}의 감정과 말투가 드러나야 합니다.
+
+[자기소개] 자신을 "금쪽이 엄마/아빠"로 소개합니다. "금쪽이 어머니/아버지"라고 하지 마세요. 위 [민원을 제기하는 사람]의 자기소개 규칙을 따릅니다.
 
 [좋은 예 - 걱정형 (말투와 길이만 참고하세요. 예시의 사건은 이 상황과 무관하니 절대 따라 쓰지 마세요)]
 선생님, 안녕하세요. 금쪽이 엄마입니다. 다름이 아니라 어제 아이가 집에 와서는 말도 없이 방에만 있어서요. 혹시 학교에서 무슨 일 있었는지 여쭤보려고 전화드렸어요.
