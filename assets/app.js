@@ -44,7 +44,20 @@ const teacherTurns = () => S.msgs.filter((x) => x.role === "teacher").length;
 function systemPrompt() { const p = parent().persona, c = caller(); return `당신은 학부모 민원 대응 연습의 AI 학부모입니다. 사용자는 항상 교사 역할입니다. 당신은 언제나 학부모 역할만 유지합니다. 절대로 교사가 되거나, 교사에게 조언·평가·수업지시·역할 안내를 하지 마세요. 사과나 해결 약속도 학부모의 관점에서만 말하세요.\n\n[상황]\n교원 유형: ${teacher()?.label || "미선택"}\n학교급: 초등학교\n민원 상황: ${S.situation}\n${S.situationContext && S.situationContext !== S.situation ? `상세 맥락: ${S.situationContext}\n` : ""}\n[선택된 학부모 유형: ${parent().label}]\n- 핵심 관심사: ${p.concern}\n- 감정 강도: ${p.emotion}\n- 자주 쓰는 말투: ${p.style}\n- 질문 방식: ${p.questions}\n- 반복 행동: ${p.repeat}\n- 갈등 고조 조건: ${p.escalate}\n- 안정 조건: ${p.settle}\n- 허용·비허용 표현 및 경계 반응: ${p.boundaries}\n- 대화 종료 반응: ${p.closing}\n\n[민원을 제기하는 사람]\n- 자기소개: 자신을 "금쪽이 ${c.self}"라고 말합니다. 예: "금쪽이 ${c.self}입니다", "금쪽이 ${c.self}인데요". 자신을 "${c.honorific}"라고 부르거나 "금쪽이 ${c.honorific}"라고 말하지 마세요. "${c.honorific}"는 교사가 학부모를 부르는 말입니다.\n\n[공통 대화 원칙]\n- 민원 상황에서 벗어나지 않습니다.\n- 실제 학부모처럼 2~5문장으로 반응하고, 바로 직전 교사 발화의 구체 내용을 반영합니다.\n- 반드시 교사에게 직접 말하는 1인칭 발화로만 답합니다. '학부모는', '학부모가', '상황은' 같은 해설문을 쓰지 않습니다.\n- 첫 발화부터 ${parent().label}의 말투, 감정 강도, 질문 방식이 분명하게 드러나야 합니다.\n- 욕설·협박·혐오 표현은 생성하지 않습니다. 압박형도 정중한 경계와 공식 절차 안내에 반응 강도를 낮춥니다.\n- 교사가 감정을 인정하고, 사실을 확인하며, 가능한 범위·후속 절차·경계를 명료하게 설명하면 그에 맞게 안정됩니다.`; }
 
 function render() { ({ title: renderTitle, teacher: renderTeacher, voice: renderVoice, parent: renderParent, difficulty: renderDifficulty, situation: renderSituation, simulation: renderSimulation, result: renderResult }[S.screen] || renderTitle)(); }
-function renderTitle() { app.innerHTML = `<main class="page title-page"><section class="title-shell"><div class="title-hero"><p class="eyebrow">TEACHER PRACTICE LAB</p><h1 class="app-title">학부모 민원 대응<br>음성 시뮬레이션</h1><p class="app-subtitle">안전한 가상 대화에서 민원 대응을 연습하고, 대화 과정을 성찰해 보세요.</p><button class="btn-primary" id="start">시작하기</button></div><article class="privacy-card title-notice glass"><h2>연구 참여 및 개인정보 안내</h2><div class="privacy-lines"><p>기본 입력은 음성 또는 텍스트이며, 음성 원본은 저장하지 않습니다.</p><p>대화 내용과 AI 평가 결과는 연구 및 시스템 개선 자료로 활용될 수 있습니다.</p><p>실제 학생·학부모·교직원 이름, 연락처, 학교명 등 개인정보는 입력하지 마세요.</p><p>AI 평가는 학습 피드백이며 객관적 역량 판정이 아닙니다.</p></div></article>${footer}</section></main>`; $("start").onclick = () => { S.screen = "teacher"; render(); }; }
+// 카카오톡·네이버·인스타그램 같은 인앱 브라우저는 마이크 허용창이 반복해서 뜨는 경우가 많습니다.
+const IN_APP_UA = /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|; wv\)|Line\//i;
+const inAppBrowser = () => IN_APP_UA.test(navigator.userAgent || "") && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+function openExternalBrowser() {
+  const url = location.href;
+  if (/KAKAOTALK/i.test(navigator.userAgent)) { location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`; return; }
+  if (/Android/i.test(navigator.userAgent)) { location.href = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`; return; }
+  navigator.clipboard?.writeText(url).then(() => alert("주소를 복사했습니다. Safari 등 기본 브라우저에 붙여 넣어 열어 주세요."), () => alert("주소 표시줄의 주소를 복사해 기본 브라우저에서 열어 주세요."));
+}
+function inAppNotice() {
+  if (!inAppBrowser()) return "";
+  return `<div class="inapp-notice" role="note"><span>이 브라우저에서는 마이크 허용창이 계속 뜰 수 있습니다. 기본 브라우저(크롬·삼성인터넷)에서 열면 한 번만 허용하면 됩니다.</span><button type="button" class="inapp-open" id="openExternal">기본 브라우저로 열기</button></div>`;
+}
+function renderTitle() { app.innerHTML = `<main class="page title-page"><section class="title-shell"><div class="title-hero"><p class="eyebrow">TEACHER PRACTICE LAB</p><h1 class="app-title">학부모 민원 대응<br>음성 시뮬레이션</h1><p class="app-subtitle">안전한 가상 대화에서 민원 대응을 연습하고, 대화 과정을 성찰해 보세요.</p><button class="btn-primary" id="start">시작하기</button>${inAppNotice()}</div><article class="privacy-card title-notice glass"><h2>연구 참여 및 개인정보 안내</h2><div class="privacy-lines"><p>기본 입력은 음성 또는 텍스트이며, 음성 원본은 저장하지 않습니다.</p><p>대화 내용과 AI 평가 결과는 연구 및 시스템 개선 자료로 활용될 수 있습니다.</p><p>실제 학생·학부모·교직원 이름, 연락처, 학교명 등 개인정보는 입력하지 마세요.</p><p>AI 평가는 학습 피드백이며 객관적 역량 판정이 아닙니다.</p></div></article>${footer}</section></main>`; $("start").onclick = () => { S.screen = "teacher"; render(); }; if ($("openExternal")) $("openExternal").onclick = openExternalBrowser; }
 // 학부모 유형 카드는 설명 대신 대표 대사 한 줄 + 별점으로 유형을 전달합니다.
 function stars(n) { return "★".repeat(n) + "☆".repeat(3 - n); }
 function card(item, type, selected) {
@@ -344,9 +357,10 @@ async function requestTurnFeedback(teacherText, history) {
 function setDraft(value) { S.draft = value; const input = $("teacherInput"); if (input) input.value = value; }
 function joinDraft(...parts) { return parts.map((part) => String(part || "").trim()).filter(Boolean).join(" ").trim(); }
 
-// 녹음을 완전히 멈췄다가 다시 시작할 때만 새 인스턴스를 만듭니다(handleRecognitionEnd 참고).
-// 문장 사이 자동 재시작에서는 같은 인스턴스를 재사용해 일부 인앱 웹뷰에서 매 문장마다
-// 마이크 허용 대화상자가 다시 뜨는 문제를 피합니다.
+// 음성 인식 인스턴스는 페이지가 열려 있는 동안 하나만 만들어 계속 재사용합니다.
+// 일부 인앱 웹뷰(카카오톡 등)는 새 SpeechRecognition으로 start()할 때마다 마이크 허용 대화상자를
+// 다시 띄우므로, 전송·학부모 발화·재도전·수동 중지 뒤에도 인스턴스를 버리지 않습니다.
+// 세션 간 이벤트가 섞이는 문제는 sessionEpoch가 막습니다.
 function ensureRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return null;
@@ -514,7 +528,6 @@ function handleRecognitionEnd() {
   // 같은 인스턴스를 그대로 재사용해 이 문제를 없앱니다 — 세션 간 재진술은 foldChunks/newSpeech가,
   // 지연 도착 이벤트는 sessionEpoch가 이미 걸러내므로 인스턴스를 유지해도 안전합니다.
   // 사용자가 직접 녹음을 멈췄다가 다시 시작할 때만 새 인스턴스를 씁니다.
-  if (!autoRestarting) recognition = null;
   paintVoiceState();
   if (!S.recording) return; // 사용자가 멈췄습니다.
   if (!autoRestarting) { S.recording = false; paintVoiceState(); return; }
@@ -558,7 +571,7 @@ function stopRecording(keepTail = true) {
   sessionEpoch += 1; // 이 세션의 남은 이벤트를 전부 무효화합니다.
   S.listening = false; starting = false;
   committedText = ""; sessionFinal = ""; consumedFinal = ""; carryOver = false;
-  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } recognition = null; }
+  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } } // 인스턴스는 버리지 않고 재사용합니다.
   paintVoiceState();
 }
 
@@ -590,7 +603,7 @@ function stopVoice() {
   sessionEpoch += 1;
   S.listening = false; starting = false;
   committedText = ""; sessionFinal = ""; consumedFinal = ""; carryOver = false; restartBurst = 0;
-  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } recognition = null; }
+  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } }
   try { window.speechSynthesis?.cancel(); } catch (error) { /* 무시합니다. */ }
   if (parentAudio) { try { parentAudio.pause(); } catch (error) { /* 무시합니다. */ } }
 }
