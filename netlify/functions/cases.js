@@ -9,7 +9,10 @@ const DRAW_SIZE = 3;
 const MAX_EXCLUDE = 200;
 const MAX_QUERY = 30;
 // 실제 폭언·협박 표현이 들어 있다는 안내 배지를 붙이는 기준입니다(원문은 바꾸지 않습니다).
-const ABUSE = /씨발|시발|새끼|죽이|죽여|죽고\s*싶|죽어|패\s*죽|밤길|\*\*|ㅅㅂ|ㅂㅅ|개\s*같/;
+// 욕설뿐 아니라 협박·폭언·위협 표현도 포함합니다. 협력형·걱정형에서는 이 표시가 있는 사례를 뽑지 않습니다.
+const ABUSE = /씨발|시발|새끼|죽이|죽여|죽고\s*싶|죽어|패\s*죽|밤길|\*\*|ㅅㅂ|ㅂㅅ|개\s*같|협박|폭언|욕설|멱살|쳐들어|행패|난동|보복|가만\s*(안|두지|놔)|혼쭐|각오해|목을\s*따/;
+// 선택한 학부모 유형이 온화한 유형이면 폭언·협박 사례를 제외합니다(태도와 사례가 어긋나지 않도록).
+const GENTLE_PARENTS = new Set(["cooperative", "anxious"]);
 
 const squash = (text) => String(text || "").replace(/\s+/g, "");
 const corpus = complaintCases.map((item) => {
@@ -24,13 +27,15 @@ export default async (req) => {
   const needle = squash(String(body.query || "").slice(0, MAX_QUERY));
   const excludeIds = new Set(Array.isArray(body.excludeIds) ? body.excludeIds.slice(0, MAX_EXCLUDE) : []);
 
-  const matches = needle ? corpus.filter((item) => item.haystack.includes(needle)) : corpus;
+  const gentle = GENTLE_PARENTS.has(String(body.parentId || ""));
+  const base = gentle ? corpus.filter((item) => !item.hasAbuse) : corpus;
+  const matches = needle ? base.filter((item) => item.haystack.includes(needle)) : base;
   let pool = matches.filter((item) => !excludeIds.has(item.id));
   // 다 보았으면 처음부터 다시 뽑을 수 있게 제외 목록을 무시합니다.
   if (!pool.length) pool = matches;
 
   const cases = pickRandom(pool, DRAW_SIZE).map(({ id, page, title, excerpt, hasAbuse }) => ({ id, page, title, excerpt, hasAbuse }));
-  return json({ cases, total: matches.length, sourceName: complaintCaseStats.sourceName });
+  return json({ cases, total: matches.length, sourceName: complaintCaseStats.sourceName, gentleFilter: gentle });
 };
 
 export const config = {

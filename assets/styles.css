@@ -2133,3 +2133,4 @@ textarea:focus-visible {
 .voice-card strong { margin-top: 6px; font-size: clamp(1.3rem, 3vh, 1.7rem); color: var(--primary); }
 .voice-desc { color: var(--muted); font-size: clamp(.95rem, 2vh, 1.08rem); padding: 0 12px; }
 @media (max-width: 720px) { .voice-grid { gap: 10px; } .voice-card { width: 48%; border-radius: 16px; } .voice-img { height: clamp(110px, 24vh, 200px); } .voice-desc { font-size: .88rem; } .voice-card strong { font-size: 1.15rem; } }
+.case-note { margin: 0; font-size: .82rem; color: var(--muted); }
