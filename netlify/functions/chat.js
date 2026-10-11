@@ -29,6 +29,21 @@ const metCriteriaEnum = [
   "대응 중단 판단"
 ];
 
+
+// 사례집 원문은 교사가 쓴 기록(“제가 전화를 못 받았더니…”)이거나 3인칭 요약인 경우가 많습니다.
+// 그대로 넣으면 모델이 화자를 혼동하거나 사건을 놓치므로, 읽는 법을 명시하고 핵심 정리(brief)를 함께 씁니다.
+const SITUATION_RULES = `[상황을 읽는 법]
+- 아래 민원 상황은 학부모가 아니라 교사나 제3자가 쓴 기록일 수 있습니다. 원문의 "저/제가/우리"는 교사일 수 있고, "아버님·어머님·학부모"로 불린 사람이 지금 당신이 연기하는 학부모입니다.
+- 당신은 이 사건의 당사자인 학부모입니다. 원문에 적힌 학부모의 행동·요구·불만을 자신의 말로 직접 겪은 일처럼 말합니다.
+- 모든 발화에 상황에 나오는 구체적 사실(누가, 무엇을, 언제, 어떻게) 중 최소 하나를 근거로 삼습니다. 상황과 무관한 일반적인 인사나 추상적 불만만 말하지 않습니다.
+- 교사가 상황과 무관한 말을 하면 당황하거나 되묻고, 곧 원래 쟁점으로 돌아옵니다. 교사가 모르는 사실을 물으면 당신이 알 만한 범위에서만 답합니다.
+- 상황에 없는 새 사건·인물·수치를 만들지 않습니다.`;
+
+function briefBlock(brief) {
+  const b = String(brief || "").trim();
+  return b ? `\n[상황 핵심 정리 — 이 정리를 기준으로 계속 말합니다]\n${b}\n` : "";
+}
+
 const responseFormat = {
   type: "json_schema",
   json_schema: {
@@ -76,7 +91,7 @@ export default async (req) => {
     }));
 
     if (isInitial) {
-      const { text, degraded } = await createInitialParentText({
+      const { text, brief, degraded } = await createInitialParentText({
         system: body.system,
         parentKey,
         parentType,
@@ -95,16 +110,18 @@ export default async (req) => {
           content: text
         });
       }
-      return json({ text, ended: false, metCriteria: [], openIssues: [], degraded });
+      return json({ text, brief: brief || "", ended: false, metCriteria: [], openIssues: [], degraded });
     }
 
     const system = `
 ${body.system}
 
+${SITUATION_RULES}
+${briefBlock(body.brief)}
 [응답 제어]
 - 현재까지 교사 발화 횟수: ${teacherTurns}회
 - 현재 민원 상황: ${situation || "제공된 상황 없음"}
-- 내부 참고 맥락: ${situationContext || "제공된 참고 맥락 없음"}
+- 내부 참고 맥락: ${situationContext && situationContext !== situation ? situationContext : "위 민원 상황과 같음"}
 - 이전까지 미해결 상태였던 학부모의 요구: ${priorOpenIssues.length ? priorOpenIssues.join(" / ") : "없음"}
 - 당신은 항상 학부모 역할입니다. 교사처럼 조언, 평가, 수업 지시, 사과문 작성, 상담자 해설을 하지 마세요.
 - 사용자는 항상 교사 역할입니다. 사용자의 발화를 학부모 발화로 오해하지 마세요.
@@ -183,8 +200,11 @@ const openingFormat = {
     schema: {
       type: "object",
       additionalProperties: false,
-      properties: { text: { type: "string" } },
-      required: ["text"]
+      properties: {
+        brief: { type: "string", description: "상황 핵심 정리 3~5줄: 학부모가 겪은 구체적 사실, 학부모가 문제 삼는 점, 학부모의 요구. 학부모 시점의 평서문." },
+        text: { type: "string" }
+      },
+      required: ["brief", "text"]
     }
   }
 };
@@ -203,24 +223,30 @@ async function createInitialParentText({ system: personaSystem, parentKey, paren
   const system = `
 ${personaSystem}
 
+${SITUATION_RULES}
+
 지금은 위 상황에서 학부모가 교사에게 처음 연락해 민원을 꺼내는 순간입니다.
+
+[작성 순서]
+1) brief: 먼저 위 상황을 학부모 시점으로 3~5줄 정리합니다. (누가 / 무엇이 있었고 / 학부모가 무엇을 문제 삼으며 / 무엇을 요구하는지)
+2) text: 그 정리를 바탕으로 첫 발화를 작성합니다. 첫 발화에는 상황의 구체 사실이 최소 하나 들어가야 합니다.
 
 [말하기 방식]
 지금은 학부모가 교사에게 전화를 걸어 첫 마디를 꺼내는 순간입니다. 이 발화는 음성으로 재생되므로,
 글로 읽을 때가 아니라 귀로 들을 때 실제 통화처럼 들려야 합니다.
 
 - 짧은 인사와 자기소개로 시작한 뒤 곧바로 용건을 꺼냅니다.
-- 상황 설명문을 요약하지 말고, 자기가 겪은 일 중 지금 가장 마음에 걸리는 것 하나만 꺼내세요.
-  민원 내용을 처음부터 빠짐없이 늘어놓는 사람은 없습니다.
+- 상황 설명문을 그대로 읽거나 요약하지 말고, 이 상황에서 지금 가장 문제 삼고 싶은 구체적 사실 하나를 자기 말로 꺼내세요.
+  민원 내용을 처음부터 빠짐없이 늘어놓는 사람은 없지만, 상황과 상관없는 말로 시작해서도 안 됩니다.
 - 말하듯 씁니다. 문장 길이가 들쭉날쭉해도 좋고, 완결된 문어체보다 실제 통화 말투가 낫습니다.
 - 2~3문장으로 짧게 말합니다. 한 문장을 길게 늘이지 마세요.
 - 교사에게 직접 말하는 1인칭으로만 씁니다. 자녀는 "금쪽이"로 부릅니다.
 - 첫 문장부터 ${parentType}의 감정과 말투가 드러나야 합니다.
 
-[좋은 예 - 걱정형]
+[좋은 예 - 걱정형 (말투와 길이만 참고하세요. 예시의 사건은 이 상황과 무관하니 절대 따라 쓰지 마세요)]
 선생님, 안녕하세요. 금쪽이 엄마입니다. 다름이 아니라 어제 아이가 집에 와서는 말도 없이 방에만 있어서요. 혹시 학교에서 무슨 일 있었는지 여쭤보려고 전화드렸어요.
 
-[나쁜 예 - 이렇게 쓰지 마세요]
+[나쁜 예 - 이렇게 쓰지 마세요 (형식 예시)]
 학부모는 자녀가 교실에서 겪은 일에 대해 사실 확인과 후속 조치를 요청하고 있습니다. (제3자 해설)
 선생님, 저는 금쪽이의 학부모로서 어제 발생한 교실 내 갈등 상황에 관하여 사실관계 확인 및 향후 조치 계획에 대해 문의드리고자 연락드렸습니다. (문어체 낭독문)
 
@@ -237,11 +263,12 @@ ${personaSystem}
       reasoningEffort: "low",
       system,
       input: "지금 교사에게 건네는 첫 민원 발화를 작성하세요.",
-      maxOutputTokens: 900,
+      maxOutputTokens: 1200,
       responseFormat: openingFormat
     }, "gpt-4.1-mini");
-    const text = String(JSON.parse(raw).text || "").trim();
-    return text ? { text, degraded: false } : fallback;
+    const parsed = JSON.parse(raw);
+    const text = String(parsed.text || "").trim();
+    return text ? { text, brief: String(parsed.brief || "").trim(), degraded: false } : fallback;
   } catch (error) {
     console.warn("Initial parent utterance generation failed; using template.", error.message);
     return fallback;
