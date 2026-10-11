@@ -688,6 +688,13 @@ async function speakParent(text, index = null) {
     await playClip(`data:${data.mime || "audio/mpeg"};base64,${data.audio}`);
   } catch (error) {
     if (gen !== voiceGen) return;
+    // 공급자가 고정된 통화에서는 브라우저 기본 음성(또 다른 목소리)으로 바꾸지 않습니다.
+    // 이 발화만 글로 보여 주고, ▶ 버튼으로 같은 목소리로 다시 들을 수 있게 합니다.
+    if (error?.pinned || S.ttsProvider) {
+      if (index !== null) S.forceRevealed.add(index);
+      notify("tts-pinned", "학부모 음성 합성이 지연되어 이 발화는 글로 표시했습니다. 목소리가 바뀌지 않도록 다른 음성으로 대체하지 않았습니다. ▶ 버튼으로 다시 들어 보세요.");
+      return;
+    }
     try { await speakWithBrowser(text); } catch (fallbackError) {
       // 안전장치: 음성이 전혀 안 나오면 난이도가 텍스트를 숨기고 있어도 이 발화만은 강제로 보여 줍니다.
       // 텍스트도 숨고 소리도 안 나면 연습 자체가 막힙니다.
@@ -709,7 +716,7 @@ function describeNonJson(status) {
   if (status === 404) return "요청한 기능을 서버에서 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.";
   return `서버가 예상치 못한 응답을 보냈습니다. (HTTP ${status})`;
 }
-async function apiFetchJson(url, options, retries = 2) { let lastError; for (let attempt = 0; attempt <= retries; attempt += 1) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000); try { const res = await fetch(url, { ...options, signal: controller.signal }); clearTimeout(timer); const raw = await res.text(); let data = null; try { data = raw ? JSON.parse(raw) : {}; } catch (parseError) { data = null; } if (data === null) { const error = new Error(describeNonJson(res.status)); error.fatal = res.status === 404; throw error; } if (!res.ok) { const error = new Error(data.error || "요청을 처리하지 못했습니다."); error.code = data.code; error.fatal = isFatalApiError(res.status, data.code); throw error; } return data; } catch (error) { clearTimeout(timer); lastError = error; if (error?.fatal || attempt >= retries) break; await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1))); } } throw lastError || new Error("네트워크 요청에 실패했습니다."); }
+async function apiFetchJson(url, options, retries = 2) { let lastError; for (let attempt = 0; attempt <= retries; attempt += 1) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000); try { const res = await fetch(url, { ...options, signal: controller.signal }); clearTimeout(timer); const raw = await res.text(); let data = null; try { data = raw ? JSON.parse(raw) : {}; } catch (parseError) { data = null; } if (data === null) { const error = new Error(describeNonJson(res.status)); error.fatal = res.status === 404; throw error; } if (!res.ok) { const error = new Error(data.error || "요청을 처리하지 못했습니다."); error.code = data.code; error.pinned = Boolean(data.pinned); error.fatal = isFatalApiError(res.status, data.code); throw error; } return data; } catch (error) { clearTimeout(timer); lastError = error; if (error?.fatal || attempt >= retries) break; await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1))); } } throw lastError || new Error("네트워크 요청에 실패했습니다."); }
 async function chat(initial = false) { return apiFetchJson("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: "초등학교", parentId: parent().id, parentType: parent().label, callerHonorific: caller().honorific, callerSelf: caller().self, situation: S.situation, situationContext: S.situationContext, brief: S.brief, system: systemPrompt(), messages: S.apiMsgs, initial, teacherTurns: teacherTurns(), openIssues: S.openIssues }) }); }
 // 서버에 아예 닿지 못했을 때만 쓰는 대사입니다. 상황 설명문은 3인칭 서술이라 낭독하면 지문처럼 들리므로 인용하지 않습니다.
 function fallbackParentOpening() { const p = parent(); if (p.id === "pressure") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요.`; if (p.id === "anxious") return `선생님, 금쪽이 ${caller().self}입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요.`; if (p.id === "avoidant") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다.`; if (p.id === "demanding") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다.`; return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다.`; }
