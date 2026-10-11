@@ -63,9 +63,14 @@ const responseFormat = {
           type: "array",
           items: { type: "string" },
           description: "학부모가 아직 받지 못한 요구·확인을 짧은 구로 나열. 모두 해결되었으면 빈 배열."
+        },
+        tone: {
+          type: "string",
+          enum: ["softened", "steady", "tense", "heated"],
+          description: "이번 발화를 말할 때의 감정 강도. 같은 학부모 유형 안에서의 변화만 나타낸다. 교사 응대로 마음이 풀렸으면 softened, 변화 없으면 steady, 불만이 쌓이거나 답을 못 받아 날이 서면 tense, 크게 격해졌으면 heated."
         }
       },
-      required: ["text", "ended", "metCriteria", "openIssues"]
+      required: ["text", "ended", "metCriteria", "openIssues", "tone"]
     }
   }
 };
@@ -110,7 +115,7 @@ export default async (req) => {
           content: text
         });
       }
-      return json({ text, brief: brief || "", ended: false, metCriteria: [], openIssues: [], degraded });
+      return json({ text, brief: brief || "", ended: false, metCriteria: [], openIssues: [], tone: "steady", degraded });
     }
 
     const system = `
@@ -139,6 +144,7 @@ ${briefBlock(body.brief)}
   "안정 조건"이 실제로 충족되지 않았으면 ended는 false입니다. 최소 턴을 채웠다는 이유만으로 종료하지 마세요.
 - ended가 true이면 text에 "대화가 마무리되었습니다."라는 문장을 자연스럽게 포함합니다.
 - metCriteria에는 바로 직전 교사 발화에서 관찰된 수행요소만 넣습니다. 점수는 절대 말하지 않습니다.
+- tone: 이번 발화의 감정 강도입니다. 직전 교사 응대가 학부모의 요구를 풀어 주면 softened, 평소 수준이면 steady, 답을 못 받아 불만이 쌓이면 tense, 크게 격해졌으면 heated입니다. 유형의 성격 범위 안에서만 변화시키고 text의 어조와 반드시 일치시키세요.
 - text에는 학부모가 실제로 말하는 내용만 2~5문장으로 넣습니다. JSON 외 설명을 덧붙이지 마세요.
 `.trim();
 
@@ -181,7 +187,8 @@ ${briefBlock(body.brief)}
       });
     }
 
-    return json({ text, ended, metCriteria, openIssues });
+    const tone = ["softened", "steady", "tense", "heated"].includes(turn.tone) ? turn.tone : "steady";
+    return json({ text, ended, metCriteria, openIssues, tone });
   } catch (error) {
     return errorResponse(error, "학부모 응답을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }

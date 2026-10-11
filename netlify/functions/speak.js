@@ -1,49 +1,23 @@
+import { GEMINI_VOICE_CHOICES, geminiPrompt, geminiVoiceFor, normalizeGender, normalizePersona, normalizeTone, openaiInstructions, openaiVoiceFor } from "./_voice_profiles.js";
 import { describeNetworkError, errorResponse, getEnv, json, readJson, toUserFacingError } from "./_shared.js";
 
 const MAX_INPUT_CHARS = 800;
 const FALLBACK_VOICE = "alloy";
 
-// gpt-4o-mini-tts는 instructions로 낭독 톤을 조절할 수 있습니다.
-// 학부모 유형별 감정 강도를 첫 발화부터 음성으로 드러내기 위해 사용합니다.
-const deliveryByPersona = {
-  cooperative: "정중하고 차분한 중년 학부모의 목소리로, 또박또박 예의 있게 말합니다.",
-  anxious: "걱정이 묻어나는 조심스러운 목소리로, 살짝 떨리듯 천천히 말합니다.",
-  avoidant: "감정을 눌러 담은 낮고 짧은 말투로, 거리감 있게 담담히 말합니다.",
-  demanding: "단호하고 또렷한 목소리로, 요구 사항을 분명하게 끊어 말합니다.",
-  pressure: "화가 잔뜩 난 채 빠르고 날카롭게 몰아붙이는 말투로, 언성이 높고 말끝을 세게 끊어 말합니다. " +
-    "다만 욕설이나 실제 위협이 되는 말은 하지 않습니다."
-};
-
-// Gemini TTS는 말투를 영어 지시문으로 주는 쪽이 안정적이라 유형별 연기 지시를 따로 둡니다.
-const geminiStyleByPersona = {
-  cooperative: "politely and calmly, like a courteous middle-aged parent, speaking clearly",
-  anxious: "in a worried, hesitant, slightly trembling voice, a bit slowly",
-  avoidant: "in a low, flat, guarded tone with short phrases and emotional distance",
-  demanding: "firmly and crisply, in a logical tone, pausing between each demand",
-  pressure: "angrily, fast and sharp, with a raised voice and hard stops at the end of sentences"
-};
-// 한 통화의 모든 발화가 같은 사람처럼 들리도록, 발화마다 달라지는 것은 대사뿐이고 인물 설정·속도는 고정합니다.
-const geminiPaceByPersona = { cooperative: "moderate and steady", anxious: "slightly slow with small hesitations", avoidant: "slow and flat with short pauses", demanding: "measured and crisp", pressure: "fast and clipped" };
-function geminiPrompt({ gender, style, parentId, text }) {
-  const who = gender === "male" ? "a father in his early 40s" : "a mother in her early 40s";
-  const pace = geminiPaceByPersona[parentId] || geminiPaceByPersona.cooperative;
-  return `# AUDIO PROFILE
-${who}, speaking standard Seoul Korean on a phone call with his or her child's elementary school teacher. Keep exactly the same voice identity, pitch range, accent and speaking pace in every line of this call.
-## DIRECTOR'S NOTES
-Style: ${style}
-Pace: ${pace}
-Never read these notes aloud and never add words that are not in the transcript.
-#### TRANSCRIPT
-${text}`;
-}
-// 오디션 페이지에서 고를 수 있는 Gemini 음성 이름입니다. 최종 기본값은 환경변수로 정합니다.
-export const GEMINI_VOICES = ["Kore", "Aoede", "Leda", "Zephyr", "Callirrhoe", "Charon", "Orus", "Fenrir", "Puck", "Algieba"];
-const GEMINI_DEFAULT_VOICE = { female: "Kore", male: "Orus" };
+// 목소리·연기 설계는 _voice_profiles.js에 있습니다(유형 × 성별 음성, 연기 프로필, 턴별 강도).
+export { GEMINI_VOICE_CHOICES as GEMINI_VOICES_BY_GENDER } from "./_voice_profiles.js";
+export const GEMINI_VOICES = [...new Set(Object.values(GEMINI_VOICE_CHOICES).flat())];
 
 export default async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const body = await readJson(req);
+  // 오디션 페이지가 현재 유형별 음성 배정과 후보 목록을 읽어 가는 용도입니다(키 값은 노출하지 않음).
+  if (body?.describe) {
+    const types = ["cooperative", "anxious", "avoidant", "demanding", "pressure"];
+    const pick = (fn) => Object.fromEntries(["female", "male"].map((g) => [g, Object.fromEntries(types.map((t) => [t, fn(g, t)]))]));
+    return json({ gemini: pick(geminiVoiceFor), openai: pick(openaiVoiceFor), choices: GEMINI_VOICE_CHOICES, geminiConfigured: Boolean(getEnv("GEMINI_API_KEY")) });
+  }
   const text = String(body?.text || "").trim().slice(0, MAX_INPUT_CHARS);
   if (!text) return json({ error: "text is required" }, 400);
 
@@ -61,9 +35,14 @@ export default async (req) => {
   const apiKey = getEnv("OPENAI_API_KEY");
   if (!apiKey) return json({ error: "OPENAI_API_KEY is not configured." }, 500);
 
+  const persona = normalizePersona(String(body?.parentId || ""));
+  const gender = normalizeGender(body?.gender);
+  const tone = normalizeTone(body?.tone);
+  const variant = body?.promptVariant === "legacy" ? "legacy" : "rich";
   const model = getEnv("OPENAI_TTS_MODEL") || "gpt-4o-mini-tts";
-  const voice = String(body?.voice || getEnv("OPENAI_TTS_VOICE") || "coral");
-  const instructions = (deliveryByPersona[String(body?.parentId || "")] || deliveryByPersona.cooperative) + ` 40대 초반 ${body?.gender === "male" ? "아버지" : "어머니"}의 목소리이며, 한 통화 동안 같은 사람처럼 같은 음높이와 속도를 유지합니다.`;
+  // 음성은 유형 × 성별로 서버가 정합니다. body.voice는 오디션 페이지에서 직접 고를 때만 씁니다.
+  const voice = String(body?.audition ? (body?.openaiVoice || "") : "") || openaiVoiceFor(gender, persona);
+  const instructions = openaiInstructions({ gender, persona, tone, variant });
 
   try {
     let result = await requestSpeech({ apiKey, model, voice, text, instructions });
@@ -72,7 +51,7 @@ export default async (req) => {
       result = await requestSpeech({ apiKey, model, voice: FALLBACK_VOICE, text, instructions });
     }
     if (!result.ok) return json({ error: toUserFacingError(result.status, result.error).message }, result.status || 502);
-    return json({ audio: result.audio, mime: "audio/mpeg", provider: "openai", ...(geminiError ? { geminiError } : {}) });
+    return json({ audio: result.audio, mime: "audio/mpeg", provider: "openai", voice, ...(geminiError ? { geminiError } : {}), ...(body?.debug ? { prompt: instructions } : {}) });
   } catch (error) {
     return errorResponse(error, "학부모 음성을 합성하지 못했습니다.");
   }
@@ -85,10 +64,13 @@ let workingGeminiModel = "";
 async function tryGemini({ text, body }) {
   const key = getEnv("GEMINI_API_KEY");
   if (!key) return null;
-  const gender = body?.gender === "male" ? "male" : "female";
-  const requested = String(body?.geminiVoice || "");
-  const voiceName = GEMINI_VOICES.includes(requested) ? requested : (getEnv(gender === "male" ? "GEMINI_TTS_VOICE_MALE" : "GEMINI_TTS_VOICE_FEMALE") || GEMINI_DEFAULT_VOICE[gender]);
-  const style = geminiStyleByPersona[String(body?.parentId || "")] || geminiStyleByPersona.cooperative;
+  const gender = normalizeGender(body?.gender);
+  const persona = normalizePersona(String(body?.parentId || ""));
+  const tone = normalizeTone(body?.tone);
+  const variant = body?.promptVariant === "legacy" ? "legacy" : "rich";
+  const requested = String(body?.audition ? (body?.geminiVoice || "") : "");
+  const voiceName = GEMINI_VOICES.includes(requested) ? requested : geminiVoiceFor(gender, persona);
+  const prompt = geminiPrompt({ gender, persona, tone, text, variant });
   const models = [...new Set([getEnv("GEMINI_TTS_MODEL"), workingGeminiModel, ...GEMINI_MODEL_CANDIDATES].filter(Boolean))];
   const timeoutMs = Number(getEnv("GEMINI_TIMEOUT_MS")) || 8000;
   let lastError = "";
@@ -100,7 +82,7 @@ async function tryGemini({ text, body }) {
         method: "POST",
         headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: geminiPrompt({ gender, style, parentId: String(body?.parentId || ""), text }) }] }],
+          contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } } }
         }),
         signal: controller.signal
@@ -118,7 +100,7 @@ async function tryGemini({ text, body }) {
       if (!part) { lastError = `${model}: no audio in response`; console.error("Gemini TTS returned no audio"); continue; }
       workingGeminiModel = model;
       const wav = pcmToWav(Buffer.from(part.inlineData.data, "base64"), 24000);
-      return { audio: wav.toString("base64"), mime: "audio/wav", provider: "gemini", voice: voiceName, model };
+      return { audio: wav.toString("base64"), mime: "audio/wav", provider: "gemini", voice: voiceName, model, ...(body?.debug ? { prompt } : {}) };
     } catch (error) {
       lastError = `${model}: ${error?.name === "AbortError" ? "timeout" : error?.message}`;
       console.error("Gemini TTS error:", lastError);
