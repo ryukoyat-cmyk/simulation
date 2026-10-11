@@ -35,7 +35,8 @@ export default async (req) => {
 
   // Gemini 키가 있으면 먼저 시도하고, 없거나 실패하면 아래 OpenAI 경로로 넘어갑니다.
   const gemini = await tryGemini({ text, body });
-  if (gemini) return json(gemini);
+  if (gemini?.audio) return json(gemini);
+  const geminiError = gemini?.error;
 
   const apiKey = getEnv("OPENAI_API_KEY");
   if (!apiKey) return json({ error: "OPENAI_API_KEY is not configured." }, 500);
@@ -51,11 +52,15 @@ export default async (req) => {
       result = await requestSpeech({ apiKey, model, voice: FALLBACK_VOICE, text, instructions });
     }
     if (!result.ok) return json({ error: toUserFacingError(result.status, result.error).message }, result.status || 502);
-    return json({ audio: result.audio, mime: "audio/mpeg" });
+    return json({ audio: result.audio, mime: "audio/mpeg", provider: "openai", ...(geminiError ? { geminiError } : {}) });
   } catch (error) {
     return errorResponse(error, "학부모 음성을 합성하지 못했습니다.");
   }
 };
+
+// 모델 이름은 자주 바뀌므로 환경변수를 먼저 쓰고, 없는 모델(404)이면 알려진 후보를 차례로 시도합니다.
+const GEMINI_MODEL_CANDIDATES = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts", "gemini-2.5-flash-tts"];
+let workingGeminiModel = "";
 
 async function tryGemini({ text, body }) {
   const key = getEnv("GEMINI_API_KEY");
@@ -64,32 +69,45 @@ async function tryGemini({ text, body }) {
   const requested = String(body?.geminiVoice || "");
   const voiceName = GEMINI_VOICES.includes(requested) ? requested : (getEnv(gender === "male" ? "GEMINI_TTS_VOICE_MALE" : "GEMINI_TTS_VOICE_FEMALE") || GEMINI_DEFAULT_VOICE[gender]);
   const style = geminiStyleByPersona[String(body?.parentId || "")] || geminiStyleByPersona.cooperative;
-  const model = getEnv("GEMINI_TTS_MODEL") || "gemini-2.5-flash-preview-tts";
+  const models = [...new Set([getEnv("GEMINI_TTS_MODEL"), workingGeminiModel, ...GEMINI_MODEL_CANDIDATES].filter(Boolean))];
   const timeoutMs = Number(getEnv("GEMINI_TIMEOUT_MS")) || 8000;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: "POST",
-      headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `Say in Korean, ${style}: ${text}` }] }],
-        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } } }
-      }),
-      signal: controller.signal
-    });
-    if (!res.ok) { console.error("Gemini TTS failed:", res.status, (await res.text()).slice(0, 300)); return null; }
-    const data = await res.json();
-    const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-    if (!part) { console.error("Gemini TTS returned no audio"); return null; }
-    const wav = pcmToWav(Buffer.from(part.inlineData.data, "base64"), 24000);
-    return { audio: wav.toString("base64"), mime: "audio/wav", provider: "gemini", voice: voiceName };
-  } catch (error) {
-    console.error("Gemini TTS error:", error?.name === "AbortError" ? "timeout" : error?.message);
-    return null;
-  } finally {
-    clearTimeout(timer);
+  let lastError = "";
+  for (const model of models) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Say in Korean, ${style}: ${text}` }] }],
+          generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } } }
+        }),
+        signal: controller.signal
+      });
+      if (!res.ok) {
+        const detail = (await res.text()).slice(0, 300);
+        lastError = `${model}: HTTP ${res.status} ${detail}`;
+        console.error("Gemini TTS failed:", lastError);
+        // 모델 이름 문제(404)만 다음 후보로 넘어가고, 키·할당량·형식 문제는 바로 중단합니다.
+        if (res.status === 404) continue;
+        return { error: lastError };
+      }
+      const data = await res.json();
+      const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+      if (!part) { lastError = `${model}: no audio in response`; console.error("Gemini TTS returned no audio"); continue; }
+      workingGeminiModel = model;
+      const wav = pcmToWav(Buffer.from(part.inlineData.data, "base64"), 24000);
+      return { audio: wav.toString("base64"), mime: "audio/wav", provider: "gemini", voice: voiceName, model };
+    } catch (error) {
+      lastError = `${model}: ${error?.name === "AbortError" ? "timeout" : error?.message}`;
+      console.error("Gemini TTS error:", lastError);
+      return { error: lastError };
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  return { error: lastError || "no Gemini model available" };
 }
 
 // Gemini는 헤더 없는 16비트 모노 PCM을 돌려주므로 브라우저가 재생할 수 있게 WAV 헤더를 붙입니다.
