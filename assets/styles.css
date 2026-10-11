@@ -2102,3 +2102,19 @@ textarea:focus-visible {
   .difficulty-grid .text-choice-icon { font-size: 1.3rem; }
   .difficulty-grid .perk-list { gap: 2px; }
 }
+/* 난이도 카드 글자 키우기 */
+.difficulty-grid { width: min(1180px, 100%); gap: clamp(10px, 1.6vw, 20px); }
+.difficulty-grid .text-choice { padding: clamp(14px, 3vh, 30px) clamp(16px, 1.8vw, 26px); gap: clamp(6px, 1.2vh, 12px); }
+.difficulty-grid .text-choice-icon { font-size: clamp(2.2rem, 5vh, 3.2rem); }
+.difficulty-grid .text-choice strong { font-size: clamp(1.5rem, 3.4vh, 1.9rem); }
+.difficulty-grid .text-choice-tagline { font-size: clamp(1.15rem, 2.6vh, 1.45rem); }
+.difficulty-grid .perk-list { gap: clamp(6px, 1.2vh, 12px); padding-top: clamp(8px, 1.6vh, 14px); }
+.difficulty-grid .perk-list li { font-size: clamp(.98rem, 2.1vh, 1.15rem); }
+@media (max-width: 720px) {
+  .difficulty-grid .text-choice { padding: 8px 14px; gap: 2px; }
+  .difficulty-grid .text-choice-icon { font-size: 1.5rem; }
+  .difficulty-grid .text-choice strong { font-size: 1.25rem; }
+  .difficulty-grid .text-choice-tagline { font-size: 1.05rem; }
+  .difficulty-grid .perk-list { gap: 3px; padding-top: 6px; }
+  .difficulty-grid .perk-list li { font-size: .95rem; }
+}
