@@ -68,7 +68,7 @@ function selectionPage({ step, title, items, current, type, back, next }) {
 }
 function renderTeacher() { selectionPage({ step: "01/05", title: "현재 해당하는 항목을 선택해 주세요", items: TEACHERS, current: S.teacherType, type: "teacher", back: () => { S.screen = "title"; render(); }, next: () => { S.screen = "voice"; render(); } }); }
 // 02단계: 학부모 목소리(여성/남성). 가운데 정렬 이미지 카드로 보여 줍니다.
-const VOICE_COPY = { female: "차분한 여성 목소리로 통화합니다.", male: "차분한 남성 목소리로 통화합니다." };
+const VOICE_COPY = { female: "여성 목소리로 통화합니다.", male: "남성 목소리로 통화합니다." };
 function renderVoice() {
   app.innerHTML = `<main class="page voice-page"><section class="voice-screen"><p class="step-index">STEP 02/05</p><h2 class="step-title">학부모 목소리를 선택해 주세요</h2><p class="voice-help">대화 중에는 바꿀 수 없습니다. 선택한 목소리와 호칭으로 통화가 진행됩니다.</p><div class="voice-grid">${GENDERS.map((g) => `<button class="voice-card ${S.gender === g.id ? "selected" : ""}" data-id="${g.id}" type="button"><span class="voice-img"><img src="assets/personas/${g.gender}/cooperative.webp" alt="${g.label} 학부모"></span><strong>${g.label} 학부모</strong><span class="voice-desc">${VOICE_COPY[g.gender]}</span></button>`).join("")}</div><div class="btn-row"><button class="btn-secondary" id="back">뒤로</button></div></section></main>`;
   document.querySelectorAll(".voice-card").forEach((el) => el.onclick = () => { S.gender = el.dataset.id; S.screen = "parent"; render(); });
