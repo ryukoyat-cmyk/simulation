@@ -47,15 +47,34 @@ export default async (req) => {
   const text = String(body?.text || "").trim().slice(0, MAX_INPUT_CHARS);
   if (!text) return json({ error: "text is required" }, 400);
 
-  // Gemini 키가 있으면 먼저 시도하고, 없거나 실패하면 아래 OpenAI 경로로 넘어갑니다.
-  // 클라이언트가 openai로 고정했다면(같은 통화에서 목소리가 바뀌지 않게) Gemini를 건너뜁니다.
-  // Gemini가 일시 오류로 실패하면 다른 목소리로 바꾸기 전에 한 번 더 시도합니다.
+  // 목소리가 섞이지 않게 공급자를 "고정"합니다.
+  //  - TTS_PROVIDER=gemini|openai 이면 서버 전체가 그 공급자만 씁니다(권장: 오디션 뒤에 하나로 확정).
+  //  - 설정하지 않으면(auto) 한 통화의 첫 발화에서 성공한 공급자로 클라이언트가 고정해 보냅니다(body.provider).
+  //  - 고정된 공급자가 실패해도 다른 공급자로 넘기지 않고 같은 공급자로 다시 시도한 뒤 오류를 돌려줍니다.
+  //    (넘기면 한 통화 안에서 다른 사람 목소리가 섞여 들립니다.)
+  const policy = String(getEnv("TTS_PROVIDER") || "auto").toLowerCase();
+  const clientPin = ["gemini", "openai"].includes(String(body?.provider || "")) ? String(body.provider) : "";
+  const pinned = ["gemini", "openai"].includes(policy) ? policy : clientPin;
+  const started = Date.now();
+  const budgetMs = Number(getEnv("TTS_BUDGET_MS")) || 9000; // 서버리스 함수 제한 시간 안에 끝내기 위한 총 예산
   let geminiError;
-  if (String(body?.provider || "") !== "openai") {
-    let gemini = await tryGemini({ text, body });
-    if (!gemini?.audio && gemini?.retryable) gemini = await tryGemini({ text, body });
-    if (gemini?.audio) return json(gemini);
-    geminiError = gemini?.error;
+  if (pinned !== "openai") {
+    if (!getEnv("GEMINI_API_KEY")) {
+      if (pinned === "gemini") return json({ error: "GEMINI_API_KEY is not configured.", provider: "gemini", pinned: true }, 500);
+    } else {
+      let gemini;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const remaining = budgetMs - (Date.now() - started);
+        if (attempt > 0 && remaining < 2500) break; // 남은 시간이 없으면 더 시도하지 않습니다.
+        gemini = await tryGemini({ text, body, timeoutMs: Math.min(Number(getEnv("GEMINI_TIMEOUT_MS")) || 8000, remaining) });
+        if (gemini?.audio || !gemini?.retryable) break;
+      }
+      if (gemini?.audio) return json(gemini);
+      geminiError = gemini?.error;
+      if (pinned === "gemini") {
+        return json({ error: "학부모 음성 합성이 지연되고 있습니다. 같은 목소리를 유지하려고 다른 음성으로 바꾸지 않았습니다. 잠시 뒤 다시 재생해 주세요.", provider: "gemini", pinned: true, geminiError }, 503);
+      }
+    }
   }
 
   const apiKey = getEnv("OPENAI_API_KEY");
@@ -82,7 +101,7 @@ export default async (req) => {
 const GEMINI_MODEL_CANDIDATES = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts", "gemini-2.5-flash-tts"];
 let workingGeminiModel = "";
 
-async function tryGemini({ text, body }) {
+async function tryGemini({ text, body, timeoutMs: timeoutOverride }) {
   const key = getEnv("GEMINI_API_KEY");
   if (!key) return null;
   const gender = body?.gender === "male" ? "male" : "female";
@@ -90,7 +109,7 @@ async function tryGemini({ text, body }) {
   const voiceName = GEMINI_VOICES.includes(requested) ? requested : (getEnv(gender === "male" ? "GEMINI_TTS_VOICE_MALE" : "GEMINI_TTS_VOICE_FEMALE") || GEMINI_DEFAULT_VOICE[gender]);
   const style = geminiStyleByPersona[String(body?.parentId || "")] || geminiStyleByPersona.cooperative;
   const models = [...new Set([getEnv("GEMINI_TTS_MODEL"), workingGeminiModel, ...GEMINI_MODEL_CANDIDATES].filter(Boolean))];
-  const timeoutMs = Number(getEnv("GEMINI_TIMEOUT_MS")) || 8000;
+  const timeoutMs = timeoutOverride || Number(getEnv("GEMINI_TIMEOUT_MS")) || 8000;
   let lastError = "";
   for (const model of models) {
     const controller = new AbortController();
