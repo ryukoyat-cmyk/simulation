@@ -598,18 +598,81 @@ let voiceGen = 0;
 const audioCache = new Map();
 const audioKey = (index, text) => `${S.sessionId}|${index}|${S.gender}|${S.parentId}|${text}`;
 function clearAudioCache() { for (const url of audioCache.values()) { if (String(url).startsWith("blob:")) { try { URL.revokeObjectURL(url); } catch (error) { /* 무시합니다. */ } } } audioCache.clear(); }
-function clipUrl(data) {
-  const src = `data:${data.mime || "audio/mpeg"};base64,${data.audio}`;
-  try {
-    const bin = atob(data.audio), bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-    return URL.createObjectURL(new Blob([bytes], { type: data.mime || "audio/mpeg" }));
-  } catch (error) { return src; }
+// 학부모 음성은 /api/speak-stream에서 받아, 첫 조각이 도착하는 즉시 재생합니다(MediaSource).
+// MediaSource로 mp3를 흘려 재생할 수 없는 브라우저(예: 아이폰 사파리)는 다 받은 뒤 재생합니다.
+let streamAbort = null;
+const canStreamMp3 = () => { try { return Boolean(window.MediaSource?.isTypeSupported?.("audio/mpeg")); } catch (error) { return false; } };
+async function fetchVoice(body) {
+  const controller = new AbortController(); streamAbort = controller;
+  const timer = setTimeout(() => controller.abort(), 15000); // 첫 응답까지만 기다립니다.
+  let res;
+  try { res = await fetch("/api/speak-stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal }); }
+  catch (error) { const e = new Error("음성 서버에 연결하지 못했습니다."); e.retryable = true; throw e; }
+  finally { clearTimeout(timer); }
+  const type = (res.headers.get("content-type") || "").split(";")[0].trim();
+  if (!res.ok || !type.startsWith("audio/")) {
+    let data = {}; try { data = await res.json(); } catch (error) { /* 무시합니다. */ }
+    const e = new Error(data.error || "학부모 음성을 합성하지 못했습니다."); e.retryable = data.retryable !== false && (res.status >= 500 || res.status === 429); throw e;
+  }
+  return { res, type, controller };
+}
+// onComplete(blob)은 다 받은 음성을 넘겨받아 재생용 주소를 돌려줍니다(다시 재생할 때 재사용).
+function playVoiceResponse({ res, type, controller }, onComplete) {
+  return new Promise((resolve, reject) => {
+    if (!parentAudio) parentAudio = new Audio();
+    const audio = parentAudio, chunks = [], reader = res.body.getReader();
+    let settled = false;
+    const finish = (ok, error) => {
+      if (settled) return;
+      settled = true; playbackFinish = null; audio.onended = null; audio.onerror = null;
+      ok ? resolve() : reject(error || new Error("audio playback failed"));
+    };
+    // 정지·재도전 때 stopPlayback이 부릅니다. 받는 중이던 음성도 함께 끊습니다.
+    playbackFinish = () => { try { controller.abort(); } catch (error) { /* 무시합니다. */ } finish(true); };
+    const startPlay = () => { const played = audio.play(); if (played?.catch) played.catch((error) => finish(false, error)); };
+    audio.onended = () => finish(true);
+    audio.onerror = () => finish(false);
+    if (type === "audio/mpeg" && canStreamMp3()) {
+      const media = new MediaSource();
+      const objectUrl = URL.createObjectURL(media);
+      media.addEventListener("sourceopen", async () => {
+        URL.revokeObjectURL(objectUrl);
+        let buffer;
+        try { buffer = media.addSourceBuffer("audio/mpeg"); } catch (error) { finish(false, error); return; }
+        const append = (chunk) => new Promise((ok, fail) => { buffer.addEventListener("updateend", ok, { once: true }); buffer.addEventListener("error", fail, { once: true }); buffer.appendBuffer(chunk); });
+        let started = false;
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (settled) return;
+            chunks.push(value);
+            await append(value);
+            if (!started) { started = true; startPlay(); }
+          }
+          if (media.readyState === "open") media.endOfStream();
+          if (!started) { finish(false, new Error("empty audio")); return; }
+          onComplete(new Blob(chunks, { type }));
+        } catch (error) { if (!settled) finish(false, error); }
+      }, { once: true });
+      audio.src = objectUrl;
+      return;
+    }
+    (async () => {
+      try {
+        for (;;) { const { done, value } = await reader.read(); if (done) break; if (settled) return; chunks.push(value); }
+        if (!chunks.length) { finish(false, new Error("empty audio")); return; }
+        audio.src = onComplete(new Blob(chunks, { type }));
+        startPlay();
+      } catch (error) { if (!settled) finish(false, error); }
+    })();
+  });
 }
 // 재도전이나 처음으로로 대화가 바뀌면 올라갑니다. 이전 대화의 늦은 AI 응답이 새 대화에 섞이지 않게 합니다.
 let simRun = 0;
 function stopPlayback() {
   voiceGen += 1;
+  if (streamAbort) { try { streamAbort.abort(); } catch (error) { /* 무시합니다. */ } streamAbort = null; }
   try { window.speechSynthesis?.cancel(); } catch (error) { /* 무시합니다. */ }
   if (parentAudio) { try { parentAudio.pause(); } catch (error) { /* 무시합니다. */ } }
   const finish = playbackFinish; playbackFinish = null;
@@ -717,29 +780,30 @@ async function speakParent(text, index = null) {
   const key = index !== null ? audioKey(index, text) : null;
   try {
     const cached = key ? audioCache.get(key) : null;
-    if (cached) { await playClip(cached); return; } // 이미 만든 음성은 다시 합성하지 않습니다.
-    const data = await apiFetchJson("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, parentId: parent().id, gender: caller().gender, tone: S.msgs[index]?.tone || "steady", provider: S.ttsProvider }) }, 1);
-    // 한 통화 안에서 목소리가 바뀌지 않도록 처음 성공한 공급자에 고정합니다.
-    if (!S.ttsProvider) { if (data.provider === "gemini") S.ttsProvider = "gemini"; else if (data.geminiError) S.ttsProvider = "openai"; }
-    if (gen !== voiceGen) return; // 합성을 기다리는 사이 재도전·중단되었으면 소리를 내지 않습니다.
-    const url = clipUrl(data);
-    if (key) audioCache.set(key, url);
-    await playClip(url);
+    if (cached) { await playClip(cached); return; } // 이미 만든 음성은 다시 합성하지 않습니다(같은 소리, API 비용 없음).
+    const body = { text, parentId: parent().id, gender: caller().gender, tone: (index !== null && S.msgs[index]?.tone) || "steady" };
+    let voice;
+    for (let attempt = 0; ; attempt += 1) {
+      try { voice = await fetchVoice(body); break; }
+      catch (error) {
+        if (gen !== voiceGen) return;
+        if (!error.retryable || attempt >= 1) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (gen !== voiceGen) return;
+      }
+    }
+    if (gen !== voiceGen) { try { voice.controller.abort(); } catch (error) { /* 무시합니다. */ } return; } // 기다리는 사이 재도전·중단됨
+    await playVoiceResponse(voice, (blob) => {
+      const url = URL.createObjectURL(blob);
+      if (key && gen === voiceGen) audioCache.set(key, url);
+      return url;
+    });
   } catch (error) {
     if (gen !== voiceGen) return;
-    // 공급자가 고정된 통화에서는 브라우저 기본 음성(또 다른 목소리)으로 바꾸지 않습니다.
-    // 이 발화만 글로 보여 주고, ▶ 버튼으로 같은 목소리로 다시 들을 수 있게 합니다.
-    if (error?.pinned || S.ttsProvider) {
-      if (index !== null) S.forceRevealed.add(index);
-      notify("tts-pinned", "학부모 음성 합성이 지연되어 이 발화는 글로 표시했습니다. 목소리가 바뀌지 않도록 다른 음성으로 대체하지 않았습니다. ▶ 버튼으로 다시 들어 보세요.");
-      return;
-    }
-    try { await speakWithBrowser(text); } catch (fallbackError) {
-      // 안전장치: 음성이 전혀 안 나오면 난이도가 텍스트를 숨기고 있어도 이 발화만은 강제로 보여 줍니다.
-      // 텍스트도 숨고 소리도 안 나면 연습 자체가 막힙니다.
-      if (index !== null) S.forceRevealed.add(index);
-      notify("audio-blocked", "학부모 음성을 재생하지 못했습니다. 대화 내용은 위에 글로 표시되며 연습은 그대로 이어갈 수 있습니다.");
-    }
+    // 목소리가 섞이지 않도록 브라우저 기본 음성 등 다른 목소리로 대체하지 않습니다.
+    // 이 발화만 글로 보여 주고, ▶ 버튼으로 같은 목소리를 다시 들을 수 있게 합니다.
+    if (index !== null) S.forceRevealed.add(index);
+    notify("tts-failed", "학부모 음성을 바로 재생하지 못해 이 발화는 글로 표시했습니다. 목소리가 바뀌지 않도록 다른 음성으로 대체하지 않았습니다. ▶ 버튼으로 다시 들어 보세요.");
   } finally {
     // 재도전 등으로 세대가 바뀌었다면 새 대화의 재생 상태를 건드리지 않습니다.
     if (gen === voiceGen) { S.speaking = false; S.playingIndex = null; paintVoiceState(); syncSim(); }

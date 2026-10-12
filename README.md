@@ -55,12 +55,13 @@ Netlify 사이트의 환경변수에 다음 값을 등록해야 합니다.
 - `OPENAI_EVAL_TIMEOUT_MS`: 평가 요청 제한 시간(ms). 기본값은 20000
 - `OPENAI_TTS_MODEL`: 음성 합성 모델. 기본값은 `gpt-4o-mini-tts`
 - `GEMINI_API_KEY`: (선택) 있으면 학부모 음성을 Gemini TTS로 합성하고, 없거나 실패하면 OpenAI 음성으로 대체합니다
-- `TTS_PROVIDER`: (권장) `gemini` 또는 `openai`로 정하면 서버 전체가 그 공급자만 씁니다. 실패해도 다른 공급자로 넘기지 않아 한 통화에서 목소리가 섞이지 않습니다. 미설정(auto)이면 한 통화의 첫 발화에서 성공한 공급자로 고정됩니다
+- `TTS_PROVIDER`: 시뮬레이션 학부모 음성 공급자. 기본값 `openai`(스트리밍, 첫 소리가 빠름). `gemini`로 바꾸면 스트리밍 없이 다 만든 뒤 재생해 느립니다. 어느 쪽이든 실패해도 다른 공급자나 브라우저 음성으로 대체하지 않아 한 통화에서 목소리가 섞이지 않습니다. 오디션 페이지(`/voicetest.html`)에서는 공급자를 골라 비교할 수 있습니다
+- `TTS_TONE`: `off`로 두면 대화 중 감정 강도(tone) 변화도 끄고 유형별 기본 연기로만 말합니다(기본 on)
+- `TTS_FIRST_BYTE_MS`: 스트리밍 음성의 첫 응답 대기 한도(기본 8000)
 - `TTS_BUDGET_MS`: 음성 합성 한 번의 총 시간 예산(기본 9000)
 - `GEMINI_VOICE_MAP`: (선택) 유형 × 성별 Gemini 음성 배정을 덮어쓰는 JSON. 예: `{"female":{"pressure":"Kore"},"male":{"anxious":"Puck"}}`. 기본 배정은 `netlify/functions/_voice_profiles.js`에 있고, `/voicetest.html`에서 귀로 골라 정합니다
 - `OPENAI_VOICE_MAP`: (선택) OpenAI 폴백 음성 배정 JSON(같은 형식)
 - `GEMINI_TTS_MODEL`: 기본값은 `gemini-2.5-flash-preview-tts`, `GEMINI_TIMEOUT_MS`: 기본 8000
-- `OPENAI_TTS_VOICE`: 학부모 음색. 기본값은 `coral`
 - `SUPABASE_URL`: Supabase 프로젝트 URL
 - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role 키
 
