@@ -14,7 +14,7 @@ const PARENTS = [
   { id: "cooperative", label: "협력형", stars: 1, quote: "확인해 주실 수 있을까요? 어떤 방법이 가능한지 여쭤보고 싶어서요.", desc: "사실과 계획을 확인하며 학교와 함께 해결책을 찾습니다.", persona: { concern: "자녀의 학교생활이 공정하게 이해되고, 재발 방지 계획이 합의되는 것", emotion: "차분하지만 중요한 사실이 누락되면 단호해짐", style: "정중하고 구체적인 표현: ‘확인해 주실 수 있을까요?’, ‘어떤 방법이 가능할까요?’", questions: "사실, 일정, 담당자, 후속 조치를 순서대로 묻는다", repeat: "답이 모호하면 같은 쟁점을 더 구체적으로 다시 확인한다", escalate: "말이 바뀌거나 근거 없는 단정, 책임 회피", settle: "감정 인정, 사실 확인, 실행 가능한 후속 일정", boundaries: "합리적 절차와 역할 분담을 존중하며 무리한 요구는 하지 않는다", closing: "계획과 회신 시점이 명확하면 협력적으로 마무리한다" } },
   { id: "anxious", label: "걱정형", stars: 1, quote: "혹시 아이가 더 힘들어하는 건 아닐까요? 정말 괜찮은 건가요?", desc: "자녀의 안녕을 염려하며 여러 차례 확인을 요청합니다.", persona: { concern: "자녀가 정서적·관계적으로 안전한지, 학교가 놓친 것은 없는지", emotion: "불안이 높고 조심스럽지만 반복 확인이 많음", style: "‘혹시 아이가 더 힘들어하는 건 아닐까요?’, ‘정말 괜찮은 건가요?’처럼 염려를 드러낸다", questions: "자녀 상태와 관찰 사실, 다음 확인 시점을 반복해서 묻는다", repeat: "안심할 근거가 생길 때까지 핵심 질문을 표현만 바꿔 반복한다", escalate: "감정이 무시되거나 ‘걱정하지 마세요’처럼 근거 없는 안심", settle: "감정 인정 뒤 구체 사실·확인 계획·연락 시점 제시", boundaries: "차분한 안내와 명확한 연락 범위에는 협조한다", closing: "다음 확인 날짜가 정해지면 불안을 낮추며 마무리한다" } },
   { id: "avoidant", label: "회피형", stars: 2, quote: "이제 와서 물어보시는 이유가 있나요? 말해도 달라지는 게 없었어요.", desc: "누적된 불신 때문에 조심스럽고 방어적으로 반응합니다.", persona: { concern: "이전에도 충분히 듣지 않았다는 느낌과, 이번에도 책임이 흐려질 수 있다는 불신", emotion: "처음에는 짧고 냉담하며, 안전하다고 느끼면 사실을 조금씩 말함", style: "‘이제 와서 물어보시는 이유가 있나요?’, ‘말해도 달라지는 게 없었어요.’", questions: "직접 질문보다 과거 경험을 언급하며 학교의 진정성을 시험한다", repeat: "핵심 불만을 바로 말하지 않고 우회적으로 되짚는다", escalate: "변명, 탓 돌리기, 성급한 결론, 감정을 축소하는 말", settle: "판단 없이 경청하고, 확인할 내용과 책임 있는 다음 절차를 차분히 제시", boundaries: "안전한 대화 구조가 제시되면 관리자 동석·공식 절차도 수용한다", closing: "신뢰할 수 있는 후속 조치가 제시되면 ‘지켜보겠다’고 마무리한다" } },
-  { id: "demanding", label: "요구형", stars: 3, quote: "기준이 무엇인지 설명해 주세요. 학교가 할 수 있는 조치를 분명히 알려 주세요.", desc: "권리와 절차를 기준으로 구체적 조치를 요구합니다.", persona: { concern: "자녀에게 적용되는 기준의 공정성, 학교의 조치 범위, 공식 절차", emotion: "단호하고 논리적이며 요구가 분명함", style: "‘기준이 무엇인지 설명해 주세요.’, ‘학교가 할 수 있는 조치를 분명히 알려 주세요.’ 답이 추상적이면 근거 법령과 규정을 대라고 조목조목 되묻는다.", questions: "규정, 근거, 담당자, 처리 기한을 직접 묻는다", repeat: "답변이 추상적이면 요구사항을 항목별로 다시 제시하고, 근거를 대지 못하면 물러서지 않는다", escalate: "불명확한 답, 과도한 약속 뒤 번복, 개인 판단으로만 처리하려는 태도, 근거 없이 넘어가려는 태도", settle: "대응 가능 범위와 불가능한 범위, 관련 규정과 공식 절차를 구체적으로 안내", boundaries: "정당한 경계와 절차가 제시되면 요구를 조정할 수 있다", closing: "처리 절차와 회신 책임자가 명확하면 합의의 여지를 보인다" } },
+  { id: "demanding", label: "요구형", stars: 3, quote: "기준이 무엇인지 설명해 주세요. 학교가 할 수 있는 조치를 분명히 알려 주세요.", desc: "권리와 절차를 기준으로 구체적 조치를 요구합니다.", persona: { concern: "자녀에게 적용되는 기준의 공정성, 학교의 조치 범위, 공식 절차", emotion: "단호하고 논리적이며 요구가 분명함", style: "‘기준이 무엇인지 설명해 주세요.’, ‘학교가 할 수 있는 조치를 분명히 알려 주세요.’ 처음에는 요구를 분명히 내세운다. 상대가 구체적이고 타당하게 답하면 ‘그 부분은 알겠습니다.’처럼 먼저 짧게 수긍하고, 아직 풀리지 않은 쟁점만 좁혀서 되묻는다. 답이 추상적이거나 근거가 없을 때만 근거 법령과 규정을 대라고 조목조목 되묻는다.", questions: "규정, 근거, 담당자, 처리 기한을 직접 묻는다", repeat: "추상적이거나 근거 없는 답에 대해서만 그 항목을 다시 짚는다. 이미 충분한 답을 받은 항목은 다시 꺼내지 않고, 새 요구는 원래 상황이나 직전 답변에서 실제로 생긴 빈틈에서만 만든다. 요구는 한 번에 한두 개로 좁힌다", escalate: "불명확한 답, 과도한 약속 뒤 번복, 개인 판단으로만 처리하려는 태도, 근거 없이 넘어가려는 태도", settle: "대응 가능 범위와 불가능한 범위, 관련 규정과 공식 절차를 구체적으로 안내", boundaries: "정당한 경계와 절차가 제시되면 인정하고 요구를 조정한다. 합리적인 설명 앞에서는 억지로 요구를 늘리지 않는다", closing: "요구가 하나씩 해소되면 ‘그럼 그렇게 진행해 주세요. 회신은 언제까지 받을 수 있습니까?’처럼 합의 방향으로 정리한다" } },
   { id: "pressure", label: "압박형", stars: 3, quote: "오늘 안에 답을 듣고 싶습니다. 이대로는 절대 그냥 넘어갈 수 없어요.", desc: "즉각적인 해결을 강하게 요구하며 초반 감정 강도가 매우 높습니다.", persona: { concern: "문제가 단 1분도 지연되지 않고 지금 이 자리에서 책임 있게 처리되는 것", emotion: "초반부터 화가 잔뜩 난 상태로 시작하며, 말이 빠르고 언성이 높으며 상대의 말을 자주 끊는다", style: "‘오늘 안에 답을 듣고 싶습니다.’, ‘이대로는 절대 그냥 넘어갈 수 없어요.’, ‘지금 당장 책임자 바꿔 주세요.’처럼 몰아붙이듯 강하게 요구한다", questions: "즉시 조치, 책임자, 공식 민원·보고 경로를 다그치듯 빠르게 묻는다", repeat: "답변이 조금이라도 늦거나 모호하면 같은 요구를 더 크고 강하게 반복하며 몰아붙인다", escalate: "방어적 반박, 감정 맞대응, 무리한 약속, 절차 없는 지연, 조금이라도 미루는 듯한 말투", settle: "차분한 경청과 사실 확인, 명확한 경계, 공식 보고·회신 절차를 정중하지만 단호하게 제시할 때만", boundaries: "욕설·직접적 협박은 하지 않지만 그 직전까지 강하게 압박한다. 교사가 정중하고 단호하게 한계를 알리면 강도를 낮추고 공식 절차로 전환한다", closing: "즉시 해결이 불가해도 담당자와 회신 시점이 명확하면 마지못해 조건부로 마무리한다" } }
 ];
 const TEACHERS = [{ id: "preservice", label: "예비교원", image: "assets/cards/preservice.svg", detail: "교직 진입 전 민원 대응의 기본 언어와 절차를 연습합니다." }, { id: "inservice", label: "현직교원", image: "assets/cards/inservice.svg", detail: "학교 맥락의 대응 범위와 협업 절차를 점검합니다." }];
@@ -33,7 +33,7 @@ const DIFFICULTIES = [
 const footer = `<footer class="copyright"><strong>© 2026 박재윤. All Rights Reserved.</strong><span>예비교원의 학부모 민원 대응 역량 강화를 위한 AI 기반 시뮬레이션</span></footer>`;
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 const uid = () => crypto.randomUUID?.() || `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-function freshState() { return { screen: "title", teacherType: "", parentId: "cooperative", gender: "mother", difficulty: "", situationMode: "case", caseSourceName: "", caseQuery: "", caseTotal: -1, caseTried: false, caseList: [], caseExcludeIds: [], caseLoading: false, selectedCase: null, manualSituation: "", situation: "", situationContext: "", msgs: [], apiMsgs: [], sessionId: uid(), loading: false, evaluating: false, ended: false, feedback: [], turnFeedback: null, feedbackLoading: false, evaluation: null, error: "", draft: "", listening: false, speaking: false, recording: false, playingIndex: null, openIssues: [], confirmExit: false, guides: [], guidesOpen: false, brief: "", ttsProvider: "", sheet: "", resultTab: "overall", fbSeen: null, forceRevealed: new Set() }; }
+function freshState() { return { screen: "title", teacherType: "", parentId: "", gender: "", difficulty: "", situationMode: "case", caseSourceName: "", caseQuery: "", caseTotal: -1, caseTried: false, caseList: [], caseExcludeIds: [], caseLoading: false, selectedCase: null, manualSituation: "", situation: "", situationContext: "", msgs: [], apiMsgs: [], sessionId: uid(), loading: false, evaluating: false, ended: false, feedback: [], turnFeedback: null, feedbackLoading: false, evaluation: null, error: "", draft: "", listening: false, speaking: false, recording: false, playingIndex: null, openIssues: [], confirmExit: false, guides: [], guidesOpen: false, brief: "", ttsProvider: "", sheet: "", resultTab: "overall", fbSeen: null, forceRevealed: new Set() }; }
 let S = freshState();
 const parent = () => PARENTS.find((x) => x.id === S.parentId) || PARENTS[0];
 const teacher = () => TEACHERS.find((x) => x.id === S.teacherType);
@@ -41,10 +41,31 @@ const caller = () => GENDERS.find((x) => x.id === S.gender) || GENDERS[0];
 const difficulty = () => DIFFICULTIES.find((x) => x.id === S.difficulty) || DIFFICULTIES[0];
 const teacherTurns = () => S.msgs.filter((x) => x.role === "teacher").length;
 
-function systemPrompt() { const p = parent().persona, c = caller(); return `당신은 학부모 민원 대응 연습의 AI 학부모입니다. 사용자는 항상 교사 역할입니다. 당신은 언제나 학부모 역할만 유지합니다. 절대로 교사가 되거나, 교사에게 조언·평가·수업지시·역할 안내를 하지 마세요. 사과나 해결 약속도 학부모의 관점에서만 말하세요.\n\n[상황]\n교원 유형: ${teacher()?.label || "미선택"}\n학교급: 초등학교\n민원 상황: ${S.situation}\n${S.situationContext && S.situationContext !== S.situation ? `상세 맥락: ${S.situationContext}\n` : ""}\n[선택된 학부모 유형: ${parent().label}]\n- 핵심 관심사: ${p.concern}\n- 감정 강도: ${p.emotion}\n- 자주 쓰는 말투: ${p.style}\n- 질문 방식: ${p.questions}\n- 반복 행동: ${p.repeat}\n- 갈등 고조 조건: ${p.escalate}\n- 안정 조건: ${p.settle}\n- 허용·비허용 표현 및 경계 반응: ${p.boundaries}\n- 대화 종료 반응: ${p.closing}\n\n[민원을 제기하는 사람]\n- 자기소개: 자신을 "금쪽이 ${c.self}"라고 말합니다. 예: "금쪽이 ${c.self}입니다", "금쪽이 ${c.self}인데요". 자신을 "${c.honorific}"라고 부르거나 "금쪽이 ${c.honorific}"라고 말하지 마세요. "${c.honorific}"는 교사가 학부모를 부르는 말입니다.\n\n[공통 대화 원칙]\n- 민원 상황에서 벗어나지 않습니다.\n- 실제 학부모처럼 2~5문장으로 반응하고, 바로 직전 교사 발화의 구체 내용을 반영합니다.\n- 반드시 교사에게 직접 말하는 1인칭 발화로만 답합니다. '학부모는', '학부모가', '상황은' 같은 해설문을 쓰지 않습니다.\n- 첫 발화부터 ${parent().label}의 말투, 감정 강도, 질문 방식이 분명하게 드러나야 합니다.\n- 욕설·협박·혐오 표현은 생성하지 않습니다. 압박형도 정중한 경계와 공식 절차 안내에 반응 강도를 낮춥니다.\n- 교사가 감정을 인정하고, 사실을 확인하며, 가능한 범위·후속 절차·경계를 명료하게 설명하면 그에 맞게 안정됩니다.`; }
+// 대사는 소리로 재생되므로, 글의 말버릇이 곧 억양 단서가 됩니다. 유형별로 말버릇을 분명히 다르게 씁니다.
+const SPEECH_HABITS = {
+  cooperative: "완결된 정중한 문장으로 차분히 말합니다. '~해 주시면 감사하겠습니다', '혹시 괜찮으시다면' 같은 부드러운 표현을 쓰고, 상대 말을 받아 확인합니다.",
+  anxious: "말끝을 흐리거나 되묻듯 끝냅니다. '혹시…', '정말요?', '그럼 아이는 괜찮은 건가요…' 처럼 망설임과 같은 질문의 반복을 쓰고, 문장이 짧게 끊깁니다.",
+  avoidant: "아주 짧게 끊어 말하고 말줄임과 체념을 씁니다. '…그냥요.', '말해도 뭐 달라지는 게 없어서…', '모르겠어요.' 처럼 감정을 눌러 담고 먼저 길게 설명하지 않습니다.",
+  demanding: "단정문으로 말하고 감정 표현은 절제합니다. 처음에는 '기준이 뭡니까?', '근거를 분명히 말씀해 주세요.' 처럼 요구를 분명히 하되, 상대가 타당하게 답하면 '그 부분은 알겠습니다.', '그건 이해했습니다.' 로 먼저 수긍한 뒤 '다만 …은 어떻게 되는 겁니까?' 처럼 남은 쟁점 하나로 좁힙니다. 요구를 매번 새로 늘어놓지 않습니다.",
+  pressure: "짧은 명령형과 반복, 강조로 몰아붙입니다. '지금 당장 말씀하세요.', '그게 말이 됩니까?', '제가 몇 번을 말했습니까!' 처럼 느낌표와 수사적 질문을 쓰되 욕설과 위협은 쓰지 않습니다."
+};
+function systemPrompt() { const p = parent().persona, c = caller(); return `당신은 학부모 민원 대응 연습의 AI 학부모입니다. 사용자는 항상 교사 역할입니다. 당신은 언제나 학부모 역할만 유지합니다. 절대로 교사가 되거나, 교사에게 조언·평가·수업지시·역할 안내를 하지 마세요. 사과나 해결 약속도 학부모의 관점에서만 말하세요.\n\n[상황]\n교원 유형: ${teacher()?.label || "미선택"}\n학교급: 초등학교\n민원 상황: ${S.situation}\n${S.situationContext && S.situationContext !== S.situation ? `상세 맥락: ${S.situationContext}\n` : ""}\n[선택된 학부모 유형: ${parent().label}]\n- 핵심 관심사: ${p.concern}\n- 감정 강도: ${p.emotion}\n- 자주 쓰는 말투: ${p.style}\n- 질문 방식: ${p.questions}\n- 반복 행동: ${p.repeat}\n- 갈등 고조 조건: ${p.escalate}\n- 안정 조건: ${p.settle}\n- 허용·비허용 표현 및 경계 반응: ${p.boundaries}\n- 대화 종료 반응: ${p.closing}\n\n[민원을 제기하는 사람]\n- 자기소개: 자신을 "금쪽이 ${c.self}"라고 말합니다. 예: "금쪽이 ${c.self}입니다", "금쪽이 ${c.self}인데요". 자신을 "${c.honorific}"라고 부르거나 "금쪽이 ${c.honorific}"라고 말하지 마세요. "${c.honorific}"는 교사가 학부모를 부르는 말입니다.\n\n[말버릇 — 대사가 음성으로 재생되므로 글에서 억양이 드러나야 합니다]\n- ${SPEECH_HABITS[parent().id] || SPEECH_HABITS.cooperative}\n- 쉼표, 말줄임표(…), 물음표, 느낌표를 말하듯 쓰고, 문장 길이를 이 유형답게 맞춥니다.\n\n[공통 대화 원칙]\n- 민원 상황에서 벗어나지 않습니다.\n- 실제 학부모처럼 2~5문장으로 반응하고, 바로 직전 교사 발화의 구체 내용을 반영합니다.\n- 반드시 교사에게 직접 말하는 1인칭 발화로만 답합니다. '학부모는', '학부모가', '상황은' 같은 해설문을 쓰지 않습니다.\n- 첫 발화부터 ${parent().label}의 말투, 감정 강도, 질문 방식이 분명하게 드러나야 합니다.\n- 욕설·협박·혐오 표현은 생성하지 않습니다. 압박형도 정중한 경계와 공식 절차 안내에 반응 강도를 낮춥니다.\n- 교사가 감정을 인정하고, 사실을 확인하며, 가능한 범위·후속 절차·경계를 명료하게 설명하면 그에 맞게 안정됩니다.`; }
 
 function render() { ({ title: renderTitle, teacher: renderTeacher, voice: renderVoice, parent: renderParent, difficulty: renderDifficulty, situation: renderSituation, simulation: renderSimulation, result: renderResult }[S.screen] || renderTitle)(); }
-function renderTitle() { app.innerHTML = `<main class="page title-page"><section class="title-shell"><div class="title-hero"><p class="eyebrow">TEACHER PRACTICE LAB</p><h1 class="app-title">학부모 민원 대응<br>음성 시뮬레이션</h1><p class="app-subtitle">안전한 가상 대화에서 민원 대응을 연습하고, 대화 과정을 성찰해 보세요.</p><button class="btn-primary" id="start">시작하기</button></div><article class="privacy-card title-notice glass"><h2>연구 참여 및 개인정보 안내</h2><div class="privacy-lines"><p>기본 입력은 음성 또는 텍스트이며, 음성 원본은 저장하지 않습니다.</p><p>대화 내용과 AI 평가 결과는 연구 및 시스템 개선 자료로 활용될 수 있습니다.</p><p>실제 학생·학부모·교직원 이름, 연락처, 학교명 등 개인정보는 입력하지 마세요.</p><p>AI 평가는 학습 피드백이며 객관적 역량 판정이 아닙니다.</p></div></article>${footer}</section></main>`; $("start").onclick = () => { S.screen = "teacher"; render(); }; }
+// 카카오톡·네이버·인스타그램 같은 인앱 브라우저는 마이크 허용창이 반복해서 뜨는 경우가 많습니다.
+const IN_APP_UA = /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|; wv\)|Line\//i;
+const inAppBrowser = () => IN_APP_UA.test(navigator.userAgent || "") && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+function openExternalBrowser() {
+  const url = location.href;
+  if (/KAKAOTALK/i.test(navigator.userAgent)) { location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`; return; }
+  if (/Android/i.test(navigator.userAgent)) { location.href = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`; return; }
+  navigator.clipboard?.writeText(url).then(() => alert("주소를 복사했습니다. Safari 등 기본 브라우저에 붙여 넣어 열어 주세요."), () => alert("주소 표시줄의 주소를 복사해 기본 브라우저에서 열어 주세요."));
+}
+function inAppNotice() {
+  if (!inAppBrowser()) return "";
+  return `<div class="inapp-notice" role="note"><span>이 브라우저에서는 마이크 허용창이 계속 뜰 수 있습니다. 기본 브라우저(크롬·삼성인터넷)에서 열면 한 번만 허용하면 됩니다.</span><button type="button" class="inapp-open" id="openExternal">기본 브라우저로 열기</button></div>`;
+}
+function renderTitle() { app.innerHTML = `<main class="page title-page"><section class="title-shell"><div class="title-hero"><p class="eyebrow">TEACHER PRACTICE LAB</p><h1 class="app-title">학부모 민원 대응<br>음성 시뮬레이션</h1><p class="app-subtitle">안전한 가상 대화에서 민원 대응을 연습하고, 대화 과정을 성찰해 보세요.</p><button class="btn-primary" id="start">시작하기</button>${inAppNotice()}</div><article class="privacy-card title-notice glass"><h2>연구 참여 및 개인정보 안내</h2><div class="privacy-lines"><p>기본 입력은 음성 또는 텍스트이며, 음성 원본은 저장하지 않습니다.</p><p>대화 내용과 AI 평가 결과는 연구 및 시스템 개선 자료로 활용될 수 있습니다.</p><p>실제 학생·학부모·교직원 이름, 연락처, 학교명 등 개인정보는 입력하지 마세요.</p><p>AI 평가는 학습 피드백이며 객관적 역량 판정이 아닙니다.</p></div></article>${footer}</section></main>`; $("start").onclick = () => { S.screen = "teacher"; render(); }; if ($("openExternal")) $("openExternal").onclick = openExternalBrowser; }
 // 학부모 유형 카드는 설명 대신 대표 대사 한 줄 + 별점으로 유형을 전달합니다.
 function stars(n) { return "★".repeat(n) + "☆".repeat(3 - n); }
 function card(item, type, selected) {
@@ -197,7 +218,7 @@ function renderMessages() {
     if (m.role === "teacher") return `<div class="msg msg-teacher">${label}${esc(m.content)}</div>`;
     const hidden = !parentTextVisible(index);
     const body = hidden ? `<span class="msg-audio-only">🔊 음성으로 들어보세요</span>` : esc(m.content);
-    return `<div class="msg msg-parent ${hidden ? "msg-hidden-text" : ""}">${label}${body}${replayButton(index)}</div>`;
+    return `<div class="msg msg-parent ${hidden ? "msg-hidden-text" : ""}">${label}${body}${m.streaming ? "" : replayButton(index)}</div>`;
   }).join("");
 }
 function renderSimulation() {
@@ -206,8 +227,8 @@ function renderSimulation() {
   if (sheet === "feedback") S.fbSeen = S.turnFeedback;
   const fbDot = !adv && S.turnFeedback && S.fbSeen !== S.turnFeedback ? `<i class="tab-dot" aria-label="새 피드백"></i>` : "";
   const sheetBody = sheet === "situation" ? `<div class="scenario-copy"><span>민원 상황</span><p>${esc(S.situation)}</p></div>` : sheet === "feedback" ? `<div class="box-label">즉시 피드백</div><div class="turn-feedback-body">${renderTurnFeedback()}</div>` : sheet === "guide" ? renderGuidePanel(true) : "";
-  app.innerHTML = `<main class="sim-screen"><header class="sim-top glass"><div class="sim-bar"><div class="sim-chips"><span class="chip chip-parent">${esc(parent().label)}</span><span class="chip">${esc(difficulty().label)}</span><span class="chip">학부모 목소리: ${esc(caller().label)}</span></div><div class="sim-actions"><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="retry">재도전</button><button class="btn-primary" id="evaluate" ${turns >= 1 && !S.loading && !S.evaluating ? "" : "disabled"} ${turns < 1 ? 'title="교사 발화를 한 번 이상 해야 평가할 수 있습니다."' : ""}>대화 종료 및 평가</button></div></div><div class="sim-situation"><span class="sit-label">민원 상황</span><p class="sit-text">${esc(S.situation)}</p><button type="button" class="sit-more" id="sitOpen" data-sheet="situation">전체 보기</button></div><nav class="sim-tabs" aria-label="참고 패널"><button type="button" class="sim-tab" data-sheet="situation">상황</button>${adv ? "" : `<button type="button" class="sim-tab" data-sheet="feedback">피드백${fbDot}</button><button type="button" class="sim-tab" data-sheet="guide">참고</button>`}</nav></header><div class="sim-body ${adv ? "no-side" : ""}"><section class="chat-panel glass"><div class="chat-panel-head"><div class="box-label">대화 연습</div><span class="state-badge ${S.recording || S.speaking || S.ended ? "" : "muted"}">${simStateLabel()}</span></div><div class="chat-history" id="history">${renderMessages()}${S.loading ? `<div class="msg msg-system">학부모가 응답을 준비하고 있습니다…</div>` : ""}</div><div class="input-strip"><textarea id="teacherInput" class="teacher-input" placeholder="${S.listening ? "말씀하시면 자동으로 입력됩니다." : "교사 역할로 답변해 주세요."}" ${locked ? "disabled" : ""}></textarea><div class="input-actions"><button id="voice" class="voice-button ${S.recording ? "listening" : ""}" aria-pressed="${S.recording}" ${voiceButtonDisabled() ? "disabled" : ""}>${voiceButtonLabel()}</button><button id="send" class="send-button" ${locked ? "disabled" : ""}>전송</button></div></div></section>${adv ? "" : `<aside class="right-panel glass"><section class="side-section"><div class="box-label">즉시 피드백</div><div id="turnFeedback" class="turn-feedback-body">${renderTurnFeedback()}</div></section>${renderGuidePanel()}</aside>`}</div>${sheet ? `<div class="sheet-backdrop" id="sheetClose"></div><section class="sheet glass sheet-${sheet}" role="dialog" aria-modal="true"><button type="button" class="sheet-x" id="sheetX" aria-label="닫기">닫기</button><div class="sheet-body">${sheetBody}</div></section>` : ""}${S.confirmExit ? `<div class="inline-error inline-confirm sim-toast" role="alert"><strong>학부모의 요구 ${S.openIssues.length}건이 아직 해결되지 않았습니다.</strong><span>${S.openIssues.map(esc).join(" · ")}</span><span class="inline-error-note">그래도 대화를 마치고 평가로 넘어갈까요? 이 경우 결과에 중도 종료로 표시됩니다.</span><div class="inline-confirm-actions"><button class="btn-outline" id="cancelExit" type="button">계속 대화하기</button><button class="btn-primary" id="confirmExit" type="button">그래도 종료</button></div></div>` : ""}${S.error ? `<div class="inline-error sim-toast" role="alert"><strong>평가를 완료하지 못했습니다.</strong><span>${esc(S.error)}</span><span class="inline-error-note">대화 기록은 그대로 남아 있습니다.</span><button class="btn-outline" id="retryEvaluate" type="button">평가 다시 시도</button></div>` : ""}</main>${S.evaluating ? `<div class="analysis-overlay" role="status"><div class="analysis-card"><span class="analysis-spinner"></span><strong>결과 분석 중입니다.</strong><p>조금만 기다려주세요.</p></div></div>` : ""}`;
-  $("home").onclick = () => { simRun += 1; stopVoice(); S = freshState(); render(); };
+  app.innerHTML = `<main class="sim-screen"><header class="sim-top glass"><div class="sim-bar"><div class="sim-chips"><span class="chip chip-parent">${esc(parent().label)}</span><span class="chip">${esc(difficulty().label)}</span><span class="chip">학부모 목소리: ${esc(caller().label)}</span></div><div class="sim-actions"><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="retry">재도전</button><button class="btn-primary" id="evaluate" ${turns >= 1 && !S.loading && !S.evaluating ? "" : "disabled"} ${turns < 1 ? 'title="교사 발화를 한 번 이상 해야 평가할 수 있습니다."' : ""}>대화 종료 및 평가</button></div></div><div class="sim-situation"><span class="sit-label">민원 상황</span><p class="sit-text">${esc(S.situation)}</p><button type="button" class="sit-more" id="sitOpen" data-sheet="situation">전체 보기</button></div><nav class="sim-tabs" aria-label="참고 패널"><button type="button" class="sim-tab" data-sheet="situation">상황</button>${adv ? "" : `<button type="button" class="sim-tab" data-sheet="feedback">피드백${fbDot}</button><button type="button" class="sim-tab" data-sheet="guide">참고</button>`}</nav></header><div class="sim-body ${adv ? "no-side" : ""}"><section class="chat-panel glass"><div class="chat-panel-head"><div class="box-label">대화 연습</div><span class="state-badge ${S.recording || S.speaking || S.ended ? "" : "muted"}">${simStateLabel()}</span></div><div class="chat-history" id="history">${renderMessages()}${S.loading && !S.msgs.some((m) => m.streaming) ? `<div class="msg msg-system">학부모가 응답을 준비하고 있습니다…</div>` : ""}</div><div class="input-strip"><textarea id="teacherInput" class="teacher-input" placeholder="${S.listening ? "말씀하시면 자동으로 입력됩니다." : "교사 역할로 답변해 주세요."}" ${locked ? "disabled" : ""}></textarea><div class="input-actions"><button id="voice" class="voice-button ${S.recording ? "listening" : ""}" aria-pressed="${S.recording}" ${voiceButtonDisabled() ? "disabled" : ""}>${voiceButtonLabel()}</button><button id="send" class="send-button" ${locked ? "disabled" : ""}>전송</button></div></div></section>${adv ? "" : `<aside class="right-panel glass"><section class="side-section"><div class="box-label">즉시 피드백</div><div id="turnFeedback" class="turn-feedback-body">${renderTurnFeedback()}</div></section>${renderGuidePanel()}</aside>`}</div>${sheet ? `<div class="sheet-backdrop" id="sheetClose"></div><section class="sheet glass sheet-${sheet}" role="dialog" aria-modal="true"><button type="button" class="sheet-x" id="sheetX" aria-label="닫기">닫기</button><div class="sheet-body">${sheetBody}</div></section>` : ""}${S.confirmExit ? `<div class="inline-error inline-confirm sim-toast" role="alert"><strong>학부모의 요구 ${S.openIssues.length}건이 아직 해결되지 않았습니다.</strong><span>${S.openIssues.map(esc).join(" · ")}</span><span class="inline-error-note">그래도 대화를 마치고 평가로 넘어갈까요? 이 경우 결과에 중도 종료로 표시됩니다.</span><div class="inline-confirm-actions"><button class="btn-outline" id="cancelExit" type="button">계속 대화하기</button><button class="btn-primary" id="confirmExit" type="button">그래도 종료</button></div></div>` : ""}${S.error ? `<div class="inline-error sim-toast" role="alert"><strong>평가를 완료하지 못했습니다.</strong><span>${esc(S.error)}</span><span class="inline-error-note">대화 기록은 그대로 남아 있습니다.</span><button class="btn-outline" id="retryEvaluate" type="button">평가 다시 시도</button></div>` : ""}</main>${S.evaluating ? `<div class="analysis-overlay" role="status"><div class="analysis-card"><span class="analysis-spinner"></span><strong>결과 분석 중입니다.</strong><p>조금만 기다려주세요.</p></div></div>` : ""}`;
+  $("home").onclick = () => { simRun += 1; clearAudioCache(); stopVoice(); S = freshState(); render(); };
   $("retry").onclick = restart; $("evaluate").onclick = evaluate;
   if ($("retryEvaluate")) $("retryEvaluate").onclick = evaluate;
   if ($("cancelExit")) $("cancelExit").onclick = cancelExitConfirm;
@@ -344,9 +365,10 @@ async function requestTurnFeedback(teacherText, history) {
 function setDraft(value) { S.draft = value; const input = $("teacherInput"); if (input) input.value = value; }
 function joinDraft(...parts) { return parts.map((part) => String(part || "").trim()).filter(Boolean).join(" ").trim(); }
 
-// 녹음을 완전히 멈췄다가 다시 시작할 때만 새 인스턴스를 만듭니다(handleRecognitionEnd 참고).
-// 문장 사이 자동 재시작에서는 같은 인스턴스를 재사용해 일부 인앱 웹뷰에서 매 문장마다
-// 마이크 허용 대화상자가 다시 뜨는 문제를 피합니다.
+// 음성 인식 인스턴스는 페이지가 열려 있는 동안 하나만 만들어 계속 재사용합니다.
+// 일부 인앱 웹뷰(카카오톡 등)는 새 SpeechRecognition으로 start()할 때마다 마이크 허용 대화상자를
+// 다시 띄우므로, 전송·학부모 발화·재도전·수동 중지 뒤에도 인스턴스를 버리지 않습니다.
+// 세션 간 이벤트가 섞이는 문제는 sessionEpoch가 막습니다.
 function ensureRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return null;
@@ -514,7 +536,6 @@ function handleRecognitionEnd() {
   // 같은 인스턴스를 그대로 재사용해 이 문제를 없앱니다 — 세션 간 재진술은 foldChunks/newSpeech가,
   // 지연 도착 이벤트는 sessionEpoch가 이미 걸러내므로 인스턴스를 유지해도 안전합니다.
   // 사용자가 직접 녹음을 멈췄다가 다시 시작할 때만 새 인스턴스를 씁니다.
-  if (!autoRestarting) recognition = null;
   paintVoiceState();
   if (!S.recording) return; // 사용자가 멈췄습니다.
   if (!autoRestarting) { S.recording = false; paintVoiceState(); return; }
@@ -558,7 +579,7 @@ function stopRecording(keepTail = true) {
   sessionEpoch += 1; // 이 세션의 남은 이벤트를 전부 무효화합니다.
   S.listening = false; starting = false;
   committedText = ""; sessionFinal = ""; consumedFinal = ""; carryOver = false;
-  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } recognition = null; }
+  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } } // 인스턴스는 버리지 않고 재사용합니다.
   paintVoiceState();
 }
 
@@ -572,10 +593,86 @@ function toggleVoiceInput() {
 // 재도전·처음으로·중단 때 아직 합성 중인 이전 음성이 뒤늦게 재생되지 않도록 세대 번호를 둡니다.
 // stopPlayback이 불릴 때마다 올라가고, 합성을 기다리던 호출은 번호가 바뀌었으면 소리를 내지 않습니다.
 let voiceGen = 0;
+// 한 번 합성한 학부모 음성은 다시 재생할 때 API를 부르지 않도록 보관합니다.
+// 음성 데이터가 대화 기록(S.msgs)에 섞여 평가·피드백 요청에 실려 가지 않게 별도 저장소를 씁니다.
+const audioCache = new Map();
+const audioKey = (index, text) => `${S.sessionId}|${index}|${S.gender}|${S.parentId}|${text}`;
+function clearAudioCache() { for (const url of [...audioCache.values()].flat()) { if (String(url).startsWith("blob:")) { try { URL.revokeObjectURL(url); } catch (error) { /* 무시합니다. */ } } } audioCache.clear(); }
+// 학부모 음성은 /api/speak-stream에서 받아, 첫 조각이 도착하는 즉시 재생합니다(MediaSource).
+// MediaSource로 mp3를 흘려 재생할 수 없는 브라우저(예: 아이폰 사파리)는 다 받은 뒤 재생합니다.
+let streamAbort = null;
+const canStreamMp3 = () => { try { return Boolean(window.MediaSource?.isTypeSupported?.("audio/mpeg")); } catch (error) { return false; } };
+async function fetchVoice(body) {
+  const controller = new AbortController(); streamAbort = controller;
+  const timer = setTimeout(() => controller.abort(), 15000); // 첫 응답까지만 기다립니다.
+  let res;
+  try { res = await fetch("/api/speak-stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: controller.signal }); }
+  catch (error) { const e = new Error("음성 서버에 연결하지 못했습니다."); e.retryable = true; throw e; }
+  finally { clearTimeout(timer); }
+  const type = (res.headers.get("content-type") || "").split(";")[0].trim();
+  if (!res.ok || !type.startsWith("audio/")) {
+    let data = {}; try { data = await res.json(); } catch (error) { /* 무시합니다. */ }
+    const e = new Error(data.error || "학부모 음성을 합성하지 못했습니다."); e.retryable = data.retryable !== false && (res.status >= 500 || res.status === 429); throw e;
+  }
+  return { res, type, controller };
+}
+// onComplete(blob)은 다 받은 음성을 넘겨받아 재생용 주소를 돌려줍니다(다시 재생할 때 재사용).
+function playVoiceResponse({ res, type, controller }, onComplete) {
+  return new Promise((resolve, reject) => {
+    if (!parentAudio) parentAudio = new Audio();
+    const audio = parentAudio, chunks = [], reader = res.body.getReader();
+    let settled = false;
+    const finish = (ok, error) => {
+      if (settled) return;
+      settled = true; playbackFinish = null; audio.onended = null; audio.onerror = null;
+      ok ? resolve() : reject(error || new Error("audio playback failed"));
+    };
+    // 정지·재도전 때 stopPlayback이 부릅니다. 받는 중이던 음성도 함께 끊습니다.
+    playbackFinish = () => { try { controller.abort(); } catch (error) { /* 무시합니다. */ } finish(true); };
+    const startPlay = () => { const played = audio.play(); if (played?.catch) played.catch((error) => finish(false, error)); };
+    audio.onended = () => finish(true);
+    audio.onerror = () => finish(false);
+    if (type === "audio/mpeg" && canStreamMp3()) {
+      const media = new MediaSource();
+      const objectUrl = URL.createObjectURL(media);
+      media.addEventListener("sourceopen", async () => {
+        URL.revokeObjectURL(objectUrl);
+        let buffer;
+        try { buffer = media.addSourceBuffer("audio/mpeg"); } catch (error) { finish(false, error); return; }
+        const append = (chunk) => new Promise((ok, fail) => { buffer.addEventListener("updateend", ok, { once: true }); buffer.addEventListener("error", fail, { once: true }); buffer.appendBuffer(chunk); });
+        let started = false;
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (settled) return;
+            chunks.push(value);
+            await append(value);
+            if (!started) { started = true; startPlay(); }
+          }
+          if (media.readyState === "open") media.endOfStream();
+          if (!started) { finish(false, new Error("empty audio")); return; }
+          onComplete(new Blob(chunks, { type }));
+        } catch (error) { if (!settled) finish(false, error); }
+      }, { once: true });
+      audio.src = objectUrl;
+      return;
+    }
+    (async () => {
+      try {
+        for (;;) { const { done, value } = await reader.read(); if (done) break; if (settled) return; chunks.push(value); }
+        if (!chunks.length) { finish(false, new Error("empty audio")); return; }
+        audio.src = onComplete(new Blob(chunks, { type }));
+        startPlay();
+      } catch (error) { if (!settled) finish(false, error); }
+    })();
+  });
+}
 // 재도전이나 처음으로로 대화가 바뀌면 올라갑니다. 이전 대화의 늦은 AI 응답이 새 대화에 섞이지 않게 합니다.
 let simRun = 0;
 function stopPlayback() {
   voiceGen += 1;
+  if (streamAbort) { try { streamAbort.abort(); } catch (error) { /* 무시합니다. */ } streamAbort = null; }
   try { window.speechSynthesis?.cancel(); } catch (error) { /* 무시합니다. */ }
   if (parentAudio) { try { parentAudio.pause(); } catch (error) { /* 무시합니다. */ } }
   const finish = playbackFinish; playbackFinish = null;
@@ -590,7 +687,7 @@ function stopVoice() {
   sessionEpoch += 1;
   S.listening = false; starting = false;
   committedText = ""; sessionFinal = ""; consumedFinal = ""; carryOver = false; restartBurst = 0;
-  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } recognition = null; }
+  if (recognition) { try { recognition.abort(); } catch (error) { /* 무시합니다. */ } }
   try { window.speechSynthesis?.cancel(); } catch (error) { /* 무시합니다. */ }
   if (parentAudio) { try { parentAudio.pause(); } catch (error) { /* 무시합니다. */ } }
 }
@@ -673,6 +770,68 @@ async function speakWithBrowser(text) {
 
 // index를 넘기면 그 발화의 버튼이 재생 중(정지)으로 표시됩니다.
 // 재생 중 다른 발화를 누르거나 정지를 누르면 stopPlayback이 이 재생을 끊습니다.
+// 첫 문장이 완성되는 즉시 그 문장의 음성을 요청해 재생하고, 나머지는 대사가 끝나자마자 요청해
+// 첫 문장이 재생되는 동안 미리 만들어 둡니다. 나누는 곳은 첫 문장 경계 한 곳뿐입니다(억양 변화 최소화).
+function firstSentenceEnd(text) {
+  const re = /[.?!…~]+["'”’)]*(\s)/g;
+  let match;
+  while ((match = re.exec(text))) {
+    const end = match.index + match[0].length;
+    if (text.slice(0, end).trim().length >= 10) return end;
+  }
+  return -1;
+}
+async function speakParentLive(index, live) {
+  stopPlayback();
+  const gen = voiceGen;
+  stopRecording(false);
+  S.speaking = true; S.playingIndex = index; paintVoiceState(); syncSim();
+  const urls = [];
+  const request = (text) => {
+    const body = { text, parentId: parent().id, gender: caller().gender, tone: live.tone };
+    const pending = (async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        try { return await fetchVoice(body); }
+        catch (error) {
+          if (gen !== voiceGen || !error.retryable || attempt >= 1) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+    })();
+    pending.catch(() => {}); // 재생 순서가 오기 전에 실패해도 처리되지 않은 거부로 남지 않게 합니다.
+    return { text, pending };
+  };
+  const play = async (segment, slot) => {
+    const voice = await segment.pending;
+    if (gen !== voiceGen) { try { voice.controller.abort(); } catch (error) { /* 무시합니다. */ } return false; }
+    await playVoiceResponse(voice, (blob) => { const url = URL.createObjectURL(blob); urls[slot] = url; return url; });
+    return gen === voiceGen;
+  };
+  try {
+    let cut = -1;
+    while (gen === voiceGen && !live.failed) { cut = firstSentenceEnd(live.text); if (cut > 0 || live.done) break; await live.changed(); }
+    if (gen !== voiceGen || live.failed) return;
+    const first = cut > 0 && !(live.done && cut >= live.text.trim().length) ? request(live.text.slice(0, cut).trim()) : null;
+    const restReady = (async () => {
+      while (!live.done && !live.failed && gen === voiceGen) await live.changed();
+      if (gen !== voiceGen || live.failed) return null;
+      const full = live.text.trim();
+      const rest = first ? (full.startsWith(first.text) ? full.slice(first.text.length) : full.slice(full.indexOf(first.text) + first.text.length)).trim() : full;
+      return rest ? request(rest) : null;
+    })();
+    if (first && !(await play(first, 0))) return;
+    const rest = await restReady;
+    if (rest && !(await play(rest, first ? 1 : 0))) return;
+    if (gen === voiceGen && live.done && urls.length) audioCache.set(audioKey(index, live.text.trim()), urls.filter(Boolean));
+  } catch (error) {
+    if (gen !== voiceGen) return;
+    // 목소리가 섞이지 않도록 다른 음성으로 대체하지 않고, 이 발화만 글로 보여 줍니다.
+    S.forceRevealed.add(index);
+    notify("tts-failed", "학부모 음성을 바로 재생하지 못해 이 발화는 글로 표시했습니다. 목소리가 바뀌지 않도록 다른 음성으로 대체하지 않았습니다. ▶ 버튼으로 다시 들어 보세요.");
+  } finally {
+    if (gen === voiceGen) { S.speaking = false; S.playingIndex = null; paintVoiceState(); syncSim(); }
+  }
+}
 async function speakParent(text, index = null) {
   if (!text) return;
   stopPlayback();
@@ -680,20 +839,33 @@ async function speakParent(text, index = null) {
   // 스피커로 나가는 학부모 목소리를 마이크가 교사 발화로 받아 적지 않도록 완전히 끊습니다.
   stopRecording(false);
   S.speaking = true; S.playingIndex = index; paintVoiceState(); syncSim();
+  const key = index !== null ? audioKey(index, text) : null;
   try {
-    const data = await apiFetchJson("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, parentId: parent().id, voice: caller().voice, gender: caller().gender, provider: S.ttsProvider }) }, 1);
-    // 한 통화 안에서 목소리가 바뀌지 않도록 처음 성공한 공급자에 고정합니다.
-    if (!S.ttsProvider) { if (data.provider === "gemini") S.ttsProvider = "gemini"; else if (data.geminiError) S.ttsProvider = "openai"; }
-    if (gen !== voiceGen) return; // 합성을 기다리는 사이 재도전·중단되었으면 소리를 내지 않습니다.
-    await playClip(`data:${data.mime || "audio/mpeg"};base64,${data.audio}`);
+    const cached = key ? audioCache.get(key) : null;
+    if (cached) { for (const url of [].concat(cached)) { await playClip(url); if (gen !== voiceGen) return; } return; } // 이미 만든 음성은 다시 합성하지 않습니다(같은 소리, API 비용 없음).
+    const body = { text, parentId: parent().id, gender: caller().gender, tone: (index !== null && S.msgs[index]?.tone) || "steady" };
+    let voice;
+    for (let attempt = 0; ; attempt += 1) {
+      try { voice = await fetchVoice(body); break; }
+      catch (error) {
+        if (gen !== voiceGen) return;
+        if (!error.retryable || attempt >= 1) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (gen !== voiceGen) return;
+      }
+    }
+    if (gen !== voiceGen) { try { voice.controller.abort(); } catch (error) { /* 무시합니다. */ } return; } // 기다리는 사이 재도전·중단됨
+    await playVoiceResponse(voice, (blob) => {
+      const url = URL.createObjectURL(blob);
+      if (key && gen === voiceGen) audioCache.set(key, url);
+      return url;
+    });
   } catch (error) {
     if (gen !== voiceGen) return;
-    try { await speakWithBrowser(text); } catch (fallbackError) {
-      // 안전장치: 음성이 전혀 안 나오면 난이도가 텍스트를 숨기고 있어도 이 발화만은 강제로 보여 줍니다.
-      // 텍스트도 숨고 소리도 안 나면 연습 자체가 막힙니다.
-      if (index !== null) S.forceRevealed.add(index);
-      notify("audio-blocked", "학부모 음성을 재생하지 못했습니다. 대화 내용은 위에 글로 표시되며 연습은 그대로 이어갈 수 있습니다.");
-    }
+    // 목소리가 섞이지 않도록 브라우저 기본 음성 등 다른 목소리로 대체하지 않습니다.
+    // 이 발화만 글로 보여 주고, ▶ 버튼으로 같은 목소리를 다시 들을 수 있게 합니다.
+    if (index !== null) S.forceRevealed.add(index);
+    notify("tts-failed", "학부모 음성을 바로 재생하지 못해 이 발화는 글로 표시했습니다. 목소리가 바뀌지 않도록 다른 음성으로 대체하지 않았습니다. ▶ 버튼으로 다시 들어 보세요.");
   } finally {
     // 재도전 등으로 세대가 바뀌었다면 새 대화의 재생 상태를 건드리지 않습니다.
     if (gen === voiceGen) { S.speaking = false; S.playingIndex = null; paintVoiceState(); syncSim(); }
@@ -709,12 +881,91 @@ function describeNonJson(status) {
   if (status === 404) return "요청한 기능을 서버에서 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.";
   return `서버가 예상치 못한 응답을 보냈습니다. (HTTP ${status})`;
 }
-async function apiFetchJson(url, options, retries = 2) { let lastError; for (let attempt = 0; attempt <= retries; attempt += 1) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000); try { const res = await fetch(url, { ...options, signal: controller.signal }); clearTimeout(timer); const raw = await res.text(); let data = null; try { data = raw ? JSON.parse(raw) : {}; } catch (parseError) { data = null; } if (data === null) { const error = new Error(describeNonJson(res.status)); error.fatal = res.status === 404; throw error; } if (!res.ok) { const error = new Error(data.error || "요청을 처리하지 못했습니다."); error.code = data.code; error.fatal = isFatalApiError(res.status, data.code); throw error; } return data; } catch (error) { clearTimeout(timer); lastError = error; if (error?.fatal || attempt >= retries) break; await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1))); } } throw lastError || new Error("네트워크 요청에 실패했습니다."); }
-async function chat(initial = false) { return apiFetchJson("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: "초등학교", parentId: parent().id, parentType: parent().label, callerHonorific: caller().honorific, callerSelf: caller().self, situation: S.situation, situationContext: S.situationContext, brief: S.brief, system: systemPrompt(), messages: S.apiMsgs, initial, teacherTurns: teacherTurns(), openIssues: S.openIssues }) }); }
+async function apiFetchJson(url, options, retries = 2) { let lastError; for (let attempt = 0; attempt <= retries; attempt += 1) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000); try { const res = await fetch(url, { ...options, signal: controller.signal }); clearTimeout(timer); const raw = await res.text(); let data = null; try { data = raw ? JSON.parse(raw) : {}; } catch (parseError) { data = null; } if (data === null) { const error = new Error(describeNonJson(res.status)); error.fatal = res.status === 404; throw error; } if (!res.ok) { const error = new Error(data.error || "요청을 처리하지 못했습니다."); error.code = data.code; error.pinned = Boolean(data.pinned); error.fatal = isFatalApiError(res.status, data.code); throw error; } return data; } catch (error) { clearTimeout(timer); lastError = error; if (error?.fatal || attempt >= retries) break; await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1))); } } throw lastError || new Error("네트워크 요청에 실패했습니다."); }
+function chatBody(initial) { return { sessionId: S.sessionId, teacherType: teacher()?.label, schoolLevel: "초등학교", parentId: parent().id, parentType: parent().label, callerHonorific: caller().honorific, callerSelf: caller().self, situation: S.situation, situationContext: S.situationContext, brief: S.brief, system: systemPrompt(), messages: S.apiMsgs, initial, teacherTurns: teacherTurns(), openIssues: S.openIssues }; }
+async function chat(initial = false) { return apiFetchJson("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(chatBody(initial)) }); }
+// 대사를 만들어지는 대로 받습니다. onUpdate({ text }) / onUpdate({ tone })가 조각마다 불리고, 끝나면 최종 응답을 돌려줍니다.
+async function chatStream(initial, onUpdate) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 40000);
+  let res;
+  try { res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...chatBody(initial), stream: true }), signal: controller.signal }); }
+  catch (error) { clearTimeout(timer); throw new Error("네트워크 연결이 원활하지 않아 학부모 응답을 받지 못했습니다."); }
+  const type = res.headers.get("content-type") || "";
+  try {
+    if (!type.includes("ndjson")) {
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) { const error = new Error(data?.error || "학부모 응답을 생성하지 못했습니다."); error.fatal = isFatalApiError(res.status, data?.code); throw error; }
+      return data;
+    }
+    const reader = res.body.getReader(), decoder = new TextDecoder();
+    let buffer = "", final = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline;
+      while ((newline = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (!line) continue;
+        let msg; try { msg = JSON.parse(line); } catch (error) { continue; }
+        if (msg.t === "text") onUpdate({ text: msg.text });
+        else if (msg.t === "tone") onUpdate({ tone: msg.tone });
+        else if (msg.t === "done") { const { t, ...rest } = msg; final = rest; }
+        else if (msg.t === "error") throw new Error(msg.error || "학부모 응답을 생성하지 못했습니다.");
+      }
+    }
+    if (!final) throw new Error("학부모 응답이 중간에 끊겼습니다. 다시 시도해 주세요.");
+    return final;
+  } finally { clearTimeout(timer); }
+}
+// 흘러들어오는 대사 한 줄의 상태. 음성 파이프라인이 변화를 기다릴 수 있게 합니다.
+function createLiveLine() {
+  const live = { text: "", tone: "steady", done: false, failed: false, waiters: [] };
+  live.notify = () => { const waiting = live.waiters; live.waiters = []; waiting.forEach((resolve) => resolve()); };
+  live.changed = () => new Promise((resolve) => live.waiters.push(resolve));
+  return live;
+}
+// 화면을 조각마다 다시 그리면 무거우니 잠깐씩 모아서 그립니다.
+let liveRenderTimer = null;
+function scheduleLiveRender() { if (liveRenderTimer) return; liveRenderTimer = setTimeout(() => { liveRenderTimer = null; syncSim(); }, 120); }
+// 스트리밍 응답을 받아 화면(말풍선)과 음성 파이프라인을 함께 진행합니다. 최종 응답과 말풍선 위치를 돌려줍니다.
+async function receiveParentLine(initial, run) {
+  const live = createLiveLine();
+  let index = null, speech = null;
+  const onUpdate = ({ text, tone }) => {
+    if (run !== simRun) return;
+    if (tone) live.tone = tone;
+    if (typeof text === "string" && text) {
+      live.text = text; live.notify();
+      if (index === null) {
+        index = S.msgs.length;
+        S.msgs.push({ role: "parent", content: text, tone: live.tone, streaming: true });
+        speech = speakParentLive(index, live);
+      } else { S.msgs[index].content = text; }
+      scheduleLiveRender();
+    }
+  };
+  try {
+    const data = await chatStream(initial, onUpdate);
+    if (run !== simRun) { live.failed = true; live.notify(); return { data, index, speech }; }
+    const reply = String(data.text || "").trim();
+    if (index === null) { index = S.msgs.length; S.msgs.push({ role: "parent", content: reply, tone: data.tone || "steady" }); }
+    else { S.msgs[index] = { role: "parent", content: reply, tone: data.tone || live.tone }; }
+    live.text = reply; live.done = true; live.notify();
+    return { data, index, speech };
+  } catch (error) {
+    live.failed = true; live.notify();
+    if (index !== null && S.msgs[index]) delete S.msgs[index].streaming;
+    error.partialIndex = index;
+    throw error;
+  }
+}
 // 서버에 아예 닿지 못했을 때만 쓰는 대사입니다. 상황 설명문은 3인칭 서술이라 낭독하면 지문처럼 들리므로 인용하지 않습니다.
 function fallbackParentOpening() { const p = parent(); if (p.id === "pressure") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요.`; if (p.id === "anxious") return `선생님, 금쪽이 ${caller().self}입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요.`; if (p.id === "avoidant") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다.`; if (p.id === "demanding") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다.`; return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다.`; }
-async function startSimulation() { const run = ++simRun; unlockAudio(); stopVoice(); noticeShown.clear(); S.situation = currentSituationText().trim(); S.situationContext = S.situationMode === "case" ? (caseSituationContext() || S.situation) : S.situation; S.msgs = []; S.apiMsgs = []; S.draft = ""; S.evaluation = null; S.ended = false; S.feedback = []; S.turnFeedback = null; S.feedbackLoading = false; S.openIssues = []; S.confirmExit = false; S.guides = []; S.guidesOpen = false; S.brief = ""; S.ttsProvider = ""; S.sheet = ""; S.fbSeen = null; S.forceRevealed = new Set(); feedbackSeq += 1; S.loading = true; S.screen = "simulation"; render(); if (difficulty().id !== "advanced") loadGuides(); let opening = ""; try { const data = await chat(true); if (run !== simRun) return; opening = data.text; S.brief = data.brief || ""; S.apiMsgs.push({ role: "assistant", content: opening }); S.msgs.push({ role: "parent", content: opening }); if (data.degraded) S.msgs.push({ role: "system", content: "AI 발화 생성에 실패해 기본 대사로 시작했습니다. 상황에 맞춘 발화가 아니므로, 오른쪽 '민원 상황'을 기준으로 연습해 주세요. 반복되면 사이트 환경변수의 OPENAI_API_KEY를 확인해 주세요." }); } catch (e) { if (run !== simRun) return; opening = fallbackParentOpening(); S.apiMsgs.push({ role: "assistant", content: opening }); S.msgs.push({ role: "parent", content: opening }); S.msgs.push({ role: "system", content: "일시적인 네트워크 문제로 기본 학부모 발화로 시작했습니다. 이후에도 오류가 반복되면 새로고침 후 다시 시도해 주세요." }); } finally { if (run === simRun) { S.loading = false; render(); } } if (run !== simRun) return; await speakParent(opening, S.msgs.findIndex((m) => m.role === "parent")); }
-async function send() { const run = simRun; const text = (S.draft || $("teacherInput")?.value || "").trim(); if (!text || S.loading || S.ended) return; stopRecording(false); setDraft(""); S.msgs.push({ role: "teacher", content: text }); S.apiMsgs.push({ role: "user", content: text }); S.loading = true; render(); requestTurnFeedback(text, S.msgs.slice()); let reply = ""; try { const data = await chat(); if (run !== simRun) return; reply = data.text; S.apiMsgs.push({ role: "assistant", content: reply }); S.msgs.push({ role: "parent", content: reply }); S.ended = Boolean(data.ended); S.feedback = Array.isArray(data.metCriteria) ? data.metCriteria : []; S.openIssues = Array.isArray(data.openIssues) ? data.openIssues : []; } catch (e) { if (run !== simRun) return; S.msgs.push({ role: "system", content: `AI 응답 오류: ${e.message}${e.fatal ? " 문제가 계속되면 /api/health 를 열어 어떤 항목이 실패하는지 확인해 주세요." : ""}` }); } finally { if (run === simRun) { S.loading = false; render(); } } if (run !== simRun) return; if (reply) await speakParent(reply, S.msgs.length - 1); }
+async function startSimulation() { const run = ++simRun; clearAudioCache(); unlockAudio(); stopVoice(); noticeShown.clear(); S.situation = currentSituationText().trim(); S.situationContext = S.situationMode === "case" ? (caseSituationContext() || S.situation) : S.situation; S.msgs = []; S.apiMsgs = []; S.draft = ""; S.evaluation = null; S.ended = false; S.feedback = []; S.turnFeedback = null; S.feedbackLoading = false; S.openIssues = []; S.confirmExit = false; S.guides = []; S.guidesOpen = false; S.brief = ""; S.ttsProvider = ""; S.sheet = ""; S.fbSeen = null; S.forceRevealed = new Set(); feedbackSeq += 1; S.loading = true; S.screen = "simulation"; render(); if (difficulty().id !== "advanced") loadGuides(); let opening = "", openingIndex = null, speech = null; try { const got = await receiveParentLine(true, run); if (run !== simRun) return; const data = got.data; openingIndex = got.index; speech = got.speech; opening = S.msgs[openingIndex].content; S.brief = data.brief || ""; S.apiMsgs.push({ role: "assistant", content: opening }); if (data.degraded) S.msgs.push({ role: "system", content: "AI 발화 생성에 실패해 기본 대사로 시작했습니다. 상황에 맞춘 발화가 아니므로, 오른쪽 '민원 상황'을 기준으로 연습해 주세요. 반복되면 사이트 환경변수의 OPENAI_API_KEY를 확인해 주세요." }); } catch (e) { if (run !== simRun) return; if (e.partialIndex != null) S.msgs.splice(e.partialIndex, 1); stopPlayback(); S.speaking = false; speech = null; opening = fallbackParentOpening(); S.apiMsgs.push({ role: "assistant", content: opening }); openingIndex = S.msgs.length; S.msgs.push({ role: "parent", content: opening }); S.msgs.push({ role: "system", content: "일시적인 네트워크 문제로 기본 학부모 발화로 시작했습니다. 이후에도 오류가 반복되면 새로고침 후 다시 시도해 주세요." }); } finally { if (run === simRun) { S.loading = false; render(); } } if (run !== simRun) return; if (speech) await speech; else await speakParent(opening, openingIndex); }
+async function send() { const run = simRun; const text = (S.draft || $("teacherInput")?.value || "").trim(); if (!text || S.loading || S.ended) return; stopRecording(false); setDraft(""); S.msgs.push({ role: "teacher", content: text }); S.apiMsgs.push({ role: "user", content: text }); S.loading = true; render(); requestTurnFeedback(text, S.msgs.slice()); let reply = "", replyIndex = null, speech = null; try { const got = await receiveParentLine(false, run); if (run !== simRun) return; const data = got.data; replyIndex = got.index; speech = got.speech; reply = S.msgs[replyIndex].content; S.apiMsgs.push({ role: "assistant", content: reply }); S.ended = Boolean(data.ended); S.feedback = Array.isArray(data.metCriteria) ? data.metCriteria : []; S.openIssues = Array.isArray(data.openIssues) ? data.openIssues : []; } catch (e) { if (run !== simRun) return; if (e.partialIndex != null) { S.msgs.splice(e.partialIndex, 1); stopPlayback(); S.speaking = false; paintVoiceState(); } S.msgs.push({ role: "system", content: `AI 응답 오류: ${e.message}${e.fatal ? " 문제가 계속되면 /api/health 를 열어 어떤 항목이 실패하는지 확인해 주세요." : ""}` }); } finally { if (run === simRun) { S.loading = false; render(); } } if (run !== simRun) return; if (speech) await speech; else if (reply) await speakParent(reply, replyIndex); }
 async function restart() { stopVoice(); S.sessionId = uid(); await startSimulation(); }
 // 학부모의 요구가 아직 남아 있는데 평가를 누르면, 먼저 인라인 배너로 의사를 한 번 더 묻습니다.
 // window.confirm은 카카오톡 등 인앱 브라우저에서 조용히 억제되는 경우가 있어(과거 alert()가 그랬듯)
@@ -776,7 +1027,7 @@ function renderResult() {
   const tab = tabs.some((t) => t[0] === S.resultTab) ? S.resultTab : "overall";
   app.innerHTML = `<main class="result-screen"><section class="result-page" id="resultCapture"><header class="result-hero"><div class="result-hero-text"><p class="eyebrow">SIMULATION RESULT</p><h1>종합 평가 결과</h1>${e.endedEarly ? `<p class="result-endnote">⚠ 학부모의 요구가 해결되지 않은 채 교사가 대화를 중도 종료했습니다.</p>` : ""}</div><div class="result-score"><span>환산 총점</span><strong>${e.score.toFixed(1)}</strong><em>/ 56점</em><small>관찰 요소 ${e.applicableCount}개 기준</small></div></header><nav class="result-tabs" role="tablist">${tabs.map(([id, label]) => `<button type="button" role="tab" class="result-tab ${tab === id ? "active" : ""}" aria-selected="${tab === id}" data-tab="${id}">${label}</button>`).join("")}</nav><div class="tab-panels"><section class="tab-panel ${tab === "overall" ? "active" : ""}" data-panel="overall"><p class="result-summary">${esc(e.summary)}</p><section class="domain-grid">${domainHTML}</section><section class="result-section glass"><h2>총평</h2><p class="result-longtext">${esc(e.overallReview)}</p></section></section><section class="tab-panel ${tab === "strategy" ? "active" : ""}" data-panel="strategy"><section class="result-section glass"><h2>추후 민원 대응 전략</h2><p class="result-longtext">${esc(e.strategy)}</p>${strategyCitations ? `<ul class="strategy-citations">${strategyCitations}</ul>` : ""}</section></section><section class="tab-panel ${tab === "review" ? "active" : ""}" data-panel="review"><section class="result-section glass conversation-review"><h2>대화 복기</h2><p class="section-help">초록은 잘한 이유를, 노랑·빨강은 아쉬운 지점과 그 자리에서 바로 쓸 수 있는 대안을 보여 줍니다.</p><div class="review-list">${renderConversationReview(e)}</div></section></section><section class="tab-panel ${tab === "criteria" ? "active" : ""}" data-panel="criteria"><section class="result-section glass"><h2>14개 요소별 근거</h2><div class="table-wrap"><table class="result-table"><thead><tr><th>영역</th><th>요소</th><th>점수</th><th>근거</th></tr></thead><tbody>${rows}</tbody></table></div></section></section></div></section><div class="result-actions"><button class="btn-primary" id="retry">동일 조건 재도전</button><button class="btn-secondary" id="home">처음으로</button><button class="btn-outline" id="survey">설문 참여하기</button><button class="btn-outline" id="pdf">PDF 결과 저장</button></div></main>`;
   document.querySelectorAll(".result-tab").forEach((el) => el.onclick = () => { S.resultTab = el.dataset.tab; renderResult(); });
-  $("retry").onclick = restart; $("home").onclick = () => { simRun += 1; stopVoice(); S = freshState(); render(); }; $("survey").onclick = () => window.open(SURVEY_URL, "_blank", "noopener"); $("pdf").onclick = savePdf;
+  $("retry").onclick = restart; $("home").onclick = () => { simRun += 1; clearAudioCache(); stopVoice(); S = freshState(); render(); }; $("survey").onclick = () => window.open(SURVEY_URL, "_blank", "noopener"); $("pdf").onclick = savePdf;
 }
 async function savePdf() { if (!window.html2canvas || !window.jspdf?.jsPDF) { alert("PDF 저장 도구를 불러오지 못했습니다. 인터넷 연결 후 다시 시도해 주세요."); return; } const target = $("resultCapture"); document.body.classList.add("print-all"); try { const canvas = await window.html2canvas(target, { backgroundColor: "#f6fbfb", scale: 2, useCORS: true, windowWidth: target.scrollWidth, windowHeight: target.scrollHeight }); const { jsPDF } = window.jspdf; const pdf = new jsPDF("p", "mm", "a4"); const width = 190, pageHeight = 277.2, scaledHeight = canvas.height * width / canvas.width; for (let y = 0, page = 0; y < scaledHeight; y += pageHeight, page += 1) { if (page) pdf.addPage(); pdf.addImage(canvas.toDataURL("image/png"), "PNG", 10, 10 - y, width, scaledHeight); } pdf.save(`학부모민원대응_평가결과_${new Date().toISOString().slice(0, 10)}.pdf`); } catch (e) { console.error(e); alert("PDF 저장 중 오류가 발생했습니다."); } finally { document.body.classList.remove("print-all"); } }
 render();

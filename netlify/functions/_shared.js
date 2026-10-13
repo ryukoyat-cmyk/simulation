@@ -228,3 +228,92 @@ function normalizeMessages(input) {
     content: String(message.content || "")
   }));
 }
+
+// 대사를 만들어지는 대로 받기 위한 스트리밍 호출입니다. onContent(지금까지의 전체 문자열)를 조각마다 부릅니다.
+// 첫 조각 전에 실패하면 예외를 던지고(호출한 쪽이 비스트리밍 경로로 대체), 이후 실패는 그대로 던집니다.
+export async function streamOpenAIChat({ system, input, maxOutputTokens = 600, responseFormat, model, timeoutMs, onContent }) {
+  const apiKey = getEnv("OPENAI_API_KEY");
+  if (!apiKey) {
+    const missing = new Error("AI 서비스 키가 설정되지 않았습니다. 사이트 환경변수의 OPENAI_API_KEY를 등록해 주세요.");
+    missing.code = "auth";
+    throw missing;
+  }
+  const selectedModel = model || getEnv("OPENAI_MODEL") || "gpt-4.1";
+  const isReasoningModel = /^(gpt-5|o[134])/i.test(selectedModel);
+  const body = {
+    model: selectedModel,
+    messages: [{ role: "system", content: system }, ...normalizeMessages(input)],
+    max_completion_tokens: isReasoningModel ? maxOutputTokens + REASONING_HEADROOM_TOKENS : maxOutputTokens,
+    stream: true
+  };
+  if (responseFormat) body.response_format = responseFormat;
+  const firstByteMs = timeoutMs || Number(getEnv("OPENAI_TIMEOUT_MS")) || DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), firstByteMs);
+  let res;
+  try {
+    res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+  } catch (error) {
+    clearTimeout(timer);
+    throw describeNetworkError(error, "AI 서비스", firstByteMs);
+  }
+  clearTimeout(timer);
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    throw toUserFacingError(res.status, data.error?.message);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "", content = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      let chunk;
+      try { chunk = JSON.parse(payload); } catch { continue; }
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (delta) { content += delta; onContent?.(content); }
+    }
+  }
+  if (!content.trim()) {
+    const empty = new Error("AI 서비스가 빈 응답을 반환했습니다.");
+    empty.code = "upstream";
+    throw empty;
+  }
+  return content.trim();
+}
+
+// 만들어지는 중인(아직 닫히지 않은) JSON에서 문자열 필드의 지금까지 값을 꺼냅니다.
+// 예: '{"tone":"tense","text":"선생님, 지금' → partialJsonString(raw, "text") === "선생님, 지금"
+export function partialJsonString(raw, field) {
+  const match = new RegExp(`"${field}"\\s*:\\s*"`).exec(raw);
+  if (!match) return null;
+  let out = "", i = match.index + match[0].length;
+  while (i < raw.length) {
+    const ch = raw[i];
+    if (ch === "\"") return { value: out, complete: true };
+    if (ch === "\\") {
+      if (i + 1 >= raw.length) break; // 이스케이프가 아직 덜 왔습니다.
+      const next = raw[i + 1];
+      if (next === "u") {
+        if (i + 6 > raw.length) break;
+        out += String.fromCharCode(parseInt(raw.slice(i + 2, i + 6), 16)); i += 6; continue;
+      }
+      out += ({ n: "\n", t: "\t", r: "\r", b: "\b", f: "\f" })[next] ?? next; i += 2; continue;
+    }
+    out += ch; i += 1;
+  }
+  return { value: out, complete: false };
+}

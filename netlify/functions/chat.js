@@ -1,4 +1,4 @@
-import { createWithFallback, errorResponse, getEnv, json, readJson, saveToSupabase } from "./_shared.js";
+import { createWithFallback, errorResponse, getEnv, json, partialJsonString, readJson, saveToSupabase, streamOpenAIChat } from "./_shared.js";
 
 // 학부모 대사는 자연스러운 구어체가 핵심이라 추론 모델보다 대화형 모델이 잘 맞습니다.
 // 사이트에서 OPENAI_CHAT_MODEL로 따로 지정하면 그 값이 우선합니다.
@@ -44,6 +44,21 @@ function briefBlock(brief) {
   return b ? `\n[상황 핵심 정리 — 이 정리를 기준으로 계속 말합니다]\n${b}\n` : "";
 }
 
+
+// 요구형이 매 턴 기계적으로 새 요구를 만들지 않고, 교사의 답에 따라 수긍하거나 좁혀 가며 합의 쪽으로 움직이게 합니다.
+function demandingTurnRules(parentKey, parentType) {
+  if (parentKey !== "demanding" && parentType !== "요구형") return "";
+  return `
+[요구형 반응 규칙 — 직전 교사 발화를 먼저 평가한 뒤 말합니다]
+- 미해결 요구 목록의 각 항목마다 직전 교사 발화가 (a) 구체적이고 타당하게 답했는지, (b) 일부만 답했는지, (c) 모호하거나 회피·번복했는지를 판단합니다.
+- (a)이면 그 항목은 해결된 것으로 보고 짧게 수긍합니다. 예: "그 부분은 알겠습니다.", "그건 이해했습니다." 해결된 항목을 다시 꺼내거나 같은 요구를 반복하지 않습니다. openIssues에서도 즉시 제거합니다.
+- (b)이면 받아들인 부분을 인정하고, 남은 부분만 구체적으로 되묻습니다.
+- (c)일 때만 단호하게 근거·기준·절차를 다시 요구합니다. 감정적으로 몰아붙이지 않고 논리적으로 짚습니다.
+- 발화 구조: [수긍 한 문장(해당할 때)] + [남은 쟁점 한두 개]. 한 번에 요구는 최대 두 개입니다.
+- 새 요구는 원래 민원 상황이나 교사의 직전 답변에서 실제로 드러난 빈틈에서만 만듭니다. 요구를 늘리기 위해 새 쟁점을 만들지 마세요.
+- 대화가 진행될수록 요구는 줄어듭니다. 남은 쟁점이 모두 해소되면 "그럼 그렇게 진행해 주세요" 식으로 합의·마무리 방향으로 말하고, 수긍할 때는 tone을 softened로 둡니다.`;
+}
+
 const responseFormat = {
   type: "json_schema",
   json_schema: {
@@ -53,6 +68,11 @@ const responseFormat = {
       type: "object",
       additionalProperties: false,
       properties: {
+        tone: {
+          type: "string",
+          enum: ["softened", "steady", "tense", "heated"],
+          description: "이번 발화를 말할 때의 감정 강도. 같은 학부모 유형 안에서의 변화만 나타낸다. 교사 응대로 마음이 풀렸으면 softened, 변화 없으면 steady, 불만이 쌓이거나 답을 못 받아 날이 서면 tense, 크게 격해졌으면 heated."
+        },
         text: { type: "string" },
         ended: { type: "boolean" },
         metCriteria: {
@@ -65,10 +85,30 @@ const responseFormat = {
           description: "학부모가 아직 받지 못한 요구·확인을 짧은 구로 나열. 모두 해결되었으면 빈 배열."
         }
       },
-      required: ["text", "ended", "metCriteria", "openIssues"]
+      required: ["tone", "text", "ended", "metCriteria", "openIssues"]
     }
   }
 };
+
+// 대사를 만들어지는 대로 한 줄씩(JSON) 흘려보냅니다.
+//   {"t":"tone","tone":"tense"}  감정 강도가 정해지면 한 번
+//   {"t":"text","text":"지금까지의 대사"}  대사가 늘어날 때마다
+//   {"t":"done", ...최종 응답}  끝(비스트리밍 응답과 같은 모양)
+//   {"t":"error","error":"..."}  실패
+function ndjson(run) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (obj) => controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`));
+      try { await run(send); } catch (error) {
+        console.error("Streaming chat failed:", error?.detail || error?.message);
+        send({ t: "error", error: error?.code === "auth" ? error.message : "학부모 응답을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요." });
+      }
+      controller.close();
+    }
+  });
+  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" } });
+}
 
 export default async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -91,7 +131,7 @@ export default async (req) => {
     }));
 
     if (isInitial) {
-      const { text, brief, degraded } = await createInitialParentText({
+      const openingArgs = {
         system: body.system,
         parentKey,
         parentType,
@@ -100,24 +140,33 @@ export default async (req) => {
         teacherType: String(body.teacherType || ""),
         schoolLevel: String(body.schoolLevel || ""),
         callerHonorific: String(body.callerSelf || body.callerHonorific || "")
-      });
-      if (body.sessionId) {
-        await saveToSupabase("simulation_messages", {
-          session_id: body.sessionId,
-          parent_type: parentType || null,
-          situation: situation || null,
-          role: "assistant",
-          content: text
+      };
+      const finishOpening = async ({ text, brief, degraded }) => {
+        if (body.sessionId) {
+          await saveToSupabase("simulation_messages", {
+            session_id: body.sessionId,
+            parent_type: parentType || null,
+            situation: situation || null,
+            role: "assistant",
+            content: text
+          });
+        }
+        return { text, brief: brief || "", ended: false, metCriteria: [], openIssues: [], tone: "steady", degraded };
+      };
+      if (body.stream) {
+        return ndjson(async (send) => {
+          const result = await createInitialParentText({ ...openingArgs, onText: (text) => send({ t: "text", text }) });
+          send({ t: "done", ...(await finishOpening(result)) });
         });
       }
-      return json({ text, brief: brief || "", ended: false, metCriteria: [], openIssues: [], degraded });
+      return json(await finishOpening(await createInitialParentText(openingArgs)));
     }
 
     const system = `
 ${body.system}
 
 ${SITUATION_RULES}
-${briefBlock(body.brief)}
+${briefBlock(body.brief)}${demandingTurnRules(parentKey, parentType)}
 [응답 제어]
 - 현재까지 교사 발화 횟수: ${teacherTurns}회
 - 현재 민원 상황: ${situation || "제공된 상황 없음"}
@@ -133,55 +182,81 @@ ${briefBlock(body.brief)}
   만족하지 못한 요구·질문을 짧은 구로 나열하세요. 이전 미해결 요구 중 방금 교사 발화로 해결된 것은
   제거하고, 이번 턴에서 새로 생긴 요구가 있으면 추가합니다. 모두 해결됐으면 빈 배열로 둡니다.
   가벼운 유형(협력형·걱정형)은 교사가 사실을 확인하고 공감하면 쉽게 해소되지만, 까다로운 유형
-  (요구형·압박형)은 구체적인 근거·기준·절차를 실제로 받기 전까지는 openIssues를 비우지 마세요.
+  (요구형·압박형)은 구체적인 근거·기준·절차를 실제로 받기 전까지는 해당 항목을 남겨 두세요.
+  구체적인 근거·기준·절차를 실제로 받은 항목은 즉시 제거합니다.
 - 교사 발화가 ${MIN_ENDING_TURNS}회 미만이면 ended는 반드시 false입니다.
 - 교사 발화가 ${MIN_ENDING_TURNS}회 이상이어도, openIssues가 비어 있지 않거나 위 [선택된 학부모 유형]의
   "안정 조건"이 실제로 충족되지 않았으면 ended는 false입니다. 최소 턴을 채웠다는 이유만으로 종료하지 마세요.
 - ended가 true이면 text에 "대화가 마무리되었습니다."라는 문장을 자연스럽게 포함합니다.
 - metCriteria에는 바로 직전 교사 발화에서 관찰된 수행요소만 넣습니다. 점수는 절대 말하지 않습니다.
+- tone: 이번 발화의 감정 강도입니다. 직전 교사 응대가 학부모의 요구를 풀어 주면 softened, 평소 수준이면 steady, 답을 못 받아 불만이 쌓이면 tense, 크게 격해졌으면 heated입니다. 유형의 성격 범위 안에서만 변화시키고 text의 어조와 반드시 일치시키세요.
 - text에는 학부모가 실제로 말하는 내용만 2~5문장으로 넣습니다. JSON 외 설명을 덧붙이지 마세요.
 `.trim();
 
-    const raw = await createWithFallback({
-      model: chatModel(),
-      reasoningEffort: "low",
-      system,
-      input,
-      maxOutputTokens: body.maxTokens || 1200,
-      responseFormat
-    }, "gpt-4.1-mini");
+    const callOptions = { model: chatModel(), reasoningEffort: "low", system, input, maxOutputTokens: body.maxTokens || 1200, responseFormat };
+    const finalize = async (raw) => {
+      const turn = JSON.parse(raw);
+      const text = String(turn.text || "").trim();
+      const openIssues = Array.isArray(turn.openIssues) ? turn.openIssues.map(String).filter(Boolean) : [];
+      // 서버가 최종 결정권을 가집니다. 모델이 ended:true를 내도 최소 턴이나 미해결 요구 조건을 만족하지
+      // 못하면 무시합니다 — 모델의 판단 실수가 대화를 너무 이르게 끝내지 않도록 하는 안전장치입니다.
+      const ended = teacherTurns >= MIN_ENDING_TURNS && Boolean(turn.ended) && openIssues.length === 0;
+      const metCriteria = Array.isArray(turn.metCriteria)
+        ? turn.metCriteria.filter((item) => metCriteriaEnum.includes(item))
+        : [];
 
-    const turn = JSON.parse(raw);
-    const text = String(turn.text || "").trim();
-    const openIssues = Array.isArray(turn.openIssues) ? turn.openIssues.map(String).filter(Boolean) : [];
-    // 서버가 최종 결정권을 가집니다. 모델이 ended:true를 내도 최소 턴이나 미해결 요구 조건을 만족하지
-    // 못하면 무시합니다 — 모델의 판단 실수가 대화를 너무 이르게 끝내지 않도록 하는 안전장치입니다.
-    const ended = teacherTurns >= MIN_ENDING_TURNS && Boolean(turn.ended) && openIssues.length === 0;
-    const metCriteria = Array.isArray(turn.metCriteria)
-      ? turn.metCriteria.filter((item) => metCriteriaEnum.includes(item))
-      : [];
-
-    if (body.sessionId) {
-      const latestTeacher = [...body.messages].reverse().find((m) => m.role === "user");
-      if (latestTeacher && !isInitial) {
+      // 기록 저장은 응답을 보낸 뒤에 해도 됩니다(스트리밍에서는 완료 신호를 먼저 보냅니다).
+      const persist = async () => {
+      if (body.sessionId) {
+        const latestTeacher = [...body.messages].reverse().find((m) => m.role === "user");
+        if (latestTeacher && !isInitial) {
+          await saveToSupabase("simulation_messages", {
+            session_id: body.sessionId,
+            parent_type: body.parentType || null,
+            situation: body.situation || null,
+            role: "user",
+            content: String(latestTeacher.content || "")
+          });
+        }
         await saveToSupabase("simulation_messages", {
           session_id: body.sessionId,
           parent_type: body.parentType || null,
           situation: body.situation || null,
-          role: "user",
-          content: String(latestTeacher.content || "")
+          role: "assistant",
+          content: text
         });
       }
-      await saveToSupabase("simulation_messages", {
-        session_id: body.sessionId,
-        parent_type: body.parentType || null,
-        situation: body.situation || null,
-        role: "assistant",
-        content: text
+
+      };
+      const tone = ["softened", "steady", "tense", "heated"].includes(turn.tone) ? turn.tone : "steady";
+      return { payload: { text, ended, metCriteria, openIssues, tone }, persist };
+    };
+
+    if (body.stream) {
+      return ndjson(async (send) => {
+        let sentText = "", toneSent = false, raw;
+        try {
+          raw = await streamOpenAIChat({
+            ...callOptions,
+            onContent: (content) => {
+              const tone = partialJsonString(content, "tone");
+              if (!toneSent && tone?.complete) { toneSent = true; send({ t: "tone", tone: tone.value }); }
+              const text = partialJsonString(content, "text");
+              if (text && text.value.length > sentText.length) { sentText = text.value; send({ t: "text", text: text.value }); }
+            }
+          });
+        } catch (error) {
+          if (sentText) throw error; // 이미 일부를 보냈으면 오류로 알립니다.
+          raw = await createWithFallback(callOptions, "gpt-4.1-mini"); // 첫 조각 전 실패는 일반 호출로 대체합니다.
+        }
+        const { payload, persist } = await finalize(raw);
+        send({ t: "done", ...payload });
+        await persist();
       });
     }
-
-    return json({ text, ended, metCriteria, openIssues });
+    const { payload, persist } = await finalize(await createWithFallback(callOptions, "gpt-4.1-mini"));
+    await persist();
+    return json(payload);
   } catch (error) {
     return errorResponse(error, "학부모 응답을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
@@ -201,7 +276,7 @@ const openingFormat = {
       type: "object",
       additionalProperties: false,
       properties: {
-        brief: { type: "string", description: "상황 핵심 정리 3~5줄: 학부모가 겪은 구체적 사실, 학부모가 문제 삼는 점, 학부모의 요구. 학부모 시점의 평서문." },
+        brief: { type: "string", description: "상황 핵심 정리 2~3줄(짧게): 학부모가 겪은 구체적 사실, 학부모가 문제 삼는 점, 학부모의 요구. 학부모 시점의 평서문." },
         text: { type: "string" }
       },
       required: ["brief", "text"]
@@ -216,7 +291,7 @@ const openingFormat = {
 // 예전에는 여기서 parentProfiles라는 한 줄 요약을 따로 두고 있었는데, 그 요약이 클라이언트의
 // 9개 필드짜리 상세 페르소나보다 뒤에 프롬프트에 다시 들어가 유형 특성을 희석시켰습니다.
 // 이제는 body.system을 그대로 기반 삼고, 첫 발화에만 필요한 낭독 지침을 그 위에 덧붙입니다.
-async function createInitialParentText({ system: personaSystem, parentKey, parentType, situation, situationContext, teacherType, schoolLevel, callerHonorific }) {
+async function createInitialParentText({ system: personaSystem, parentKey, parentType, situation, situationContext, teacherType, schoolLevel, callerHonorific, onText }) {
   const fallback = { text: buildInitialParentText(parentKey, parentType, callerHonorific), degraded: true };
   if (!situation || !personaSystem) return fallback;
 
@@ -228,7 +303,7 @@ ${SITUATION_RULES}
 지금은 위 상황에서 학부모가 교사에게 처음 연락해 민원을 꺼내는 순간입니다.
 
 [작성 순서]
-1) brief: 먼저 위 상황을 학부모 시점으로 3~5줄 정리합니다. (누가 / 무엇이 있었고 / 학부모가 무엇을 문제 삼으며 / 무엇을 요구하는지)
+1) brief: 먼저 위 상황을 학부모 시점으로 2~3줄로 짧게 정리합니다. (누가 / 무엇이 있었고 / 학부모가 무엇을 문제 삼으며 / 무엇을 요구하는지)
 2) text: 그 정리를 바탕으로 첫 발화를 작성합니다. 첫 발화에는 상황의 구체 사실이 최소 하나 들어가야 합니다.
 
 [말하기 방식]
@@ -259,20 +334,40 @@ ${SITUATION_RULES}
 - 상황에 없는 새 사건이나 쟁점
 `.trim();
 
+  const options = {
+    model: chatModel(),
+    reasoningEffort: "low",
+    system,
+    input: "지금 교사에게 건네는 첫 민원 발화를 작성하세요.",
+    maxOutputTokens: 1200,
+    responseFormat: openingFormat
+  };
+  let partial = "";
   try {
-    const raw = await createWithFallback({
-      model: chatModel(),
-      reasoningEffort: "low",
-      system,
-      input: "지금 교사에게 건네는 첫 민원 발화를 작성하세요.",
-      maxOutputTokens: 1200,
-      responseFormat: openingFormat
-    }, "gpt-4.1-mini");
+    let raw;
+    if (onText) {
+      try {
+        raw = await streamOpenAIChat({
+          ...options,
+          onContent: (content) => {
+            const text = partialJsonString(content, "text");
+            if (text && text.value.length > partial.length) { partial = text.value; onText(partial); }
+          }
+        });
+      } catch (error) {
+        if (partial) throw error;
+        raw = await createWithFallback(options, "gpt-4.1-mini");
+      }
+    } else {
+      raw = await createWithFallback(options, "gpt-4.1-mini");
+    }
     const parsed = JSON.parse(raw);
     const text = String(parsed.text || "").trim();
     return text ? { text, brief: String(parsed.brief || "").trim(), degraded: false } : fallback;
   } catch (error) {
     console.warn("Initial parent utterance generation failed; using template.", error.message);
+    // 이미 화면·음성으로 일부가 나갔다면 그 대사를 살립니다(다른 대사로 바꾸면 더 어색합니다).
+    if (partial.trim()) return { text: partial.trim(), brief: "", degraded: false };
     return fallback;
   }
 }
