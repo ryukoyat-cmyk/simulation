@@ -68,6 +68,8 @@ export default async (req) => {
     evaluation.criteria = normalizeCriteria(evaluation.criteria);
     const applicable = evaluation.criteria.filter((item) => item.applicable);
     evaluation.score = applicable.length ? Math.round((applicable.reduce((sum, item) => sum + item.score, 0) / applicable.length) * 14 * 10) / 10 : 0;
+    // 100점 환산: 관찰된 요소의 평균(1~4점)을 100점 만점으로 바꿉니다(평균 × 25). 기존 56점 점수(score)는 연구 기록 연속성을 위해 그대로 저장합니다.
+    evaluation.score100 = applicable.length ? Math.round((applicable.reduce((sum, item) => sum + item.score, 0) / applicable.length) * 25) : 0;
     evaluation.applicableCount = applicable.length;
     evaluation.perTurn = normalizePerTurn(evaluation.perTurn, teacherTurns.length);
     evaluation.strategyCitations = normalizeStrategyCitations(evaluation.strategyGuideIds);
