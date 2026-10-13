@@ -15,10 +15,11 @@ export const DEFAULT_GEMINI_VOICES = {
   female: { cooperative: "Sulafat", anxious: "Leda", avoidant: "Gacrux", demanding: "Kore", pressure: "Pulcherrima" },
   male: { cooperative: "Achird", anxious: "Enceladus", avoidant: "Schedar", demanding: "Orus", pressure: "Fenrir" }
 };
-// OpenAI 폴백 음성(gpt-4o-mini-tts 지원 이름). OPENAI_VOICE_MAP(JSON)으로 덮어쓸 수 있습니다.
+// OpenAI 음성 합성(대체 경로)의 음성. OPENAI_VOICE_MAP(JSON)으로 덮어쓸 수 있습니다.
 export const DEFAULT_OPENAI_VOICES = {
-  female: { cooperative: "coral", anxious: "shimmer", avoidant: "sage", demanding: "nova", pressure: "alloy" },
-  male: { cooperative: "ash", anxious: "ballad", avoidant: "onyx", demanding: "echo", pressure: "verse" }
+  // 목소리는 성별당 하나입니다. 유형은 목소리 종류가 아니라 연기(감정·말투)로 구분합니다.
+  female: { cooperative: "coral", anxious: "coral", avoidant: "coral", demanding: "coral", pressure: "coral" },
+  male: { cooperative: "ash", anxious: "ash", avoidant: "ash", demanding: "ash", pressure: "ash" }
 };
 export const GEMINI_VOICE_CHOICES = {
   female: ["Sulafat", "Leda", "Gacrux", "Kore", "Pulcherrima", "Zephyr", "Aoede", "Callirrhoe", "Vindemiatrix", "Achernar", "Despina", "Autonoe"],
