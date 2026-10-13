@@ -2145,3 +2145,6 @@ textarea:focus-visible {
 .selection-page .image-choice { text-align: center; }
 .selection-page .image-choice p { text-align: center; }
 .selection-page .image-choice .choice-image { background: #fff; }
+
+/* 대화창 스크롤: 프로그램으로 맨 아래로 옮길 때 애니메이션 없이 즉시(버벅임 방지), 바깥 페이지로 스크롤이 번지지 않게 */
+.sim-screen .chat-history { scroll-behavior: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; contain: content; }

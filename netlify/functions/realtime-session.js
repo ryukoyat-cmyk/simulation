@@ -1,4 +1,5 @@
 import { SITUATION_RULES, briefBlock, demandingTurnRules } from "./_prompts.js";
+import { extractBrief } from "./_brief.js";
 import { PROFILES, normalizeGender, normalizePersona } from "./_voice_profiles.js";
 import { getEnv, json, readJson } from "./_shared.js";
 
@@ -38,7 +39,9 @@ export default async (req, context) => {
   const parentType = String(body.parentType || "학부모");
   const voice = getEnv(gender === "male" ? "REALTIME_VOICE_MALE" : "REALTIME_VOICE_FEMALE") || DEFAULT_VOICE[gender];
   const model = getEnv("OPENAI_REALTIME_MODEL") || "gpt-realtime";
-  const instructions = buildInstructions({ system: String(body.system), gender, persona, parentType, brief: body.brief });
+  // 사례에서 학부모의 구체적 요구를 먼저 뽑아 지시문에 넣습니다(요구가 사건에 근거하도록).
+  const brief = String(body.brief || "").trim() || await extractBrief({ situation: body.situation, situationContext: body.situationContext, parentType });
+  const instructions = buildInstructions({ system: String(body.system), gender, persona, parentType, brief });
 
   const session = {
     type: "realtime",
@@ -69,7 +72,8 @@ export default async (req, context) => {
     expiresAt: data.client_secret?.expires_at || data.expires_at || null,
     model,
     voice,
-    instructions: session.instructions
+    instructions: session.instructions,
+    brief
   });
 };
 
