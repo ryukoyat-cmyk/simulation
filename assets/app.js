@@ -672,6 +672,7 @@ function playVoiceResponse({ res, type, controller }, onComplete) {
 let simRun = 0;
 function stopPlayback() {
   voiceGen += 1;
+  if (RT?.current && !RT.current.settled) rtInterrupt(RT);
   if (streamAbort) { try { streamAbort.abort(); } catch (error) { /* 무시합니다. */ } streamAbort = null; }
   try { window.speechSynthesis?.cancel(); } catch (error) { /* 무시합니다. */ }
   if (parentAudio) { try { parentAudio.pause(); } catch (error) { /* 무시합니다. */ } }
@@ -682,6 +683,7 @@ function stopPlayback() {
 
 function stopVoice() {
   stopPlayback();
+  closeRealtime();
   S.recording = false; S.speaking = false;
   clearTimeout(restartTimer); restartTimer = null;
   sessionEpoch += 1;
@@ -695,6 +697,8 @@ function stopVoice() {
 // 브라우저 자동 재생 정책 때문에, 첫 발화 오디오는 사용자의 클릭 시점에 미리 열어 두어야 합니다.
 // fetch를 기다린 뒤 play()를 호출하면 제스처 컨텍스트가 만료되어 iOS에서 재생이 막힙니다.
 function unlockAudio() {
+  // 실시간 음성용 재생기도 사용자 동작(클릭) 안에서 한 번 재생해 두어야 나중에 소리가 납니다(모바일 자동재생 정책).
+  if (!rtAudio) { rtAudio = new Audio(); rtAudio.autoplay = true; try { rtAudio.src = SILENT_CLIP; const p = rtAudio.play(); if (p?.catch) p.catch(() => {}); } catch (error) { /* 무시합니다. */ } }
   if (!parentAudio) { parentAudio = new Audio(); parentAudio.preload = "auto"; }
   if (parentAudio.dataset?.unlocked) return;
   try {
@@ -842,7 +846,9 @@ async function speakParent(text, index = null) {
   const key = index !== null ? audioKey(index, text) : null;
   try {
     const cached = key ? audioCache.get(key) : null;
-    if (cached) { for (const url of [].concat(cached)) { await playClip(url); if (gen !== voiceGen) return; } return; } // 이미 만든 음성은 다시 합성하지 않습니다(같은 소리, API 비용 없음).
+    if (cached) { for (const url of [].concat(cached)) { await playClip(url); if (gen !== voiceGen) return; } return; }
+    // 실시간 음성으로 들은 발화는 다른 목소리로 다시 만들지 않습니다(녹음이 없으면 다시 듣기 불가 안내).
+    if (RT) { if (index !== null) S.forceRevealed.add(index); notify("replay-unavailable", "이 브라우저에서는 실시간 음성 다시 듣기를 지원하지 않아 대사를 글로 표시했습니다."); return; } // 이미 만든 음성은 다시 합성하지 않습니다(같은 소리, API 비용 없음).
     const body = { text, parentId: parent().id, gender: caller().gender, tone: (index !== null && S.msgs[index]?.tone) || "steady" };
     let voice;
     for (let attempt = 0; ; attempt += 1) {
@@ -931,6 +937,242 @@ function createLiveLine() {
 let liveRenderTimer = null;
 function scheduleLiveRender() { if (liveRenderTimer) return; liveRenderTimer = setTimeout(() => { liveRenderTimer = null; syncSim(); }, 120); }
 // 스트리밍 응답을 받아 화면(말풍선)과 음성 파이프라인을 함께 진행합니다. 최종 응답과 말풍선 위치를 돌려줍니다.
+// ===== Realtime 학부모 음성 =====
+// 한 대화(세션) 동안 OpenAI Realtime 모델 하나가 학부모로서 직접 말합니다. 교사 발화는 글로만 보냅니다
+// (WebRTC 수신 전용 연결이라 마이크 권한을 묻지 않습니다). 들은 음성은 녹음해 두어 ▶ 다시 듣기에 씁니다.
+// 연결이 안 되거나 도중에 끊기면 기존 방식(대사 생성 + 음성 합성)으로 자동 전환합니다.
+let RT = null;
+let rtAudio = null;
+const RT_CONNECT_TIMEOUT_MS = 12000;
+const RT_FIRST_WORD_TIMEOUT_MS = 15000;
+function rtSend(rt, event) { if (rt?.dc?.readyState !== "open") throw new Error("음성 연결이 준비되지 않았습니다."); rt.dc.send(JSON.stringify(event)); }
+function closeRealtime() {
+  const rt = RT; RT = null;
+  if (!rt) return;
+  rt.closed = true;
+  try { rt.recorder?.state === "recording" && rt.recorder.stop(); } catch (error) { /* 무시합니다. */ }
+  try { rt.dc?.close(); } catch (error) { /* 무시합니다. */ }
+  try { rt.pc?.close(); } catch (error) { /* 무시합니다. */ }
+  if (rtAudio) { try { rtAudio.pause(); rtAudio.srcObject = null; } catch (error) { /* 무시합니다. */ } }
+  rt.current?.reject?.(new Error("음성 연결이 종료되었습니다."));
+}
+async function connectRealtime(run) {
+  if (!window.RTCPeerConnection) throw new Error("이 브라우저는 실시간 음성을 지원하지 않습니다.");
+  const session = await apiFetchJson("/api/realtime-session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ system: systemPrompt(), parentId: parent().id, parentType: parent().label, gender: caller().gender, brief: S.brief }) }, 0);
+  if (run !== simRun) throw new Error("stale");
+  if (!session?.clientSecret) throw new Error("음성 세션을 만들지 못했습니다.");
+  const pc = new RTCPeerConnection();
+  const rt = { pc, dc: null, stream: null, instructions: String(session.instructions || systemPrompt()), current: null, closed: false, recorder: null };
+  try {
+    pc.addTransceiver("audio", { direction: "recvonly" });
+    pc.ontrack = (event) => {
+      rt.stream = event.streams?.[0] || new MediaStream([event.track]);
+      if (!rtAudio) { rtAudio = new Audio(); rtAudio.autoplay = true; }
+      rtAudio.srcObject = rt.stream;
+      const played = rtAudio.play(); if (played?.catch) played.catch(() => {});
+    };
+    const dc = pc.createDataChannel("oai-events");
+    rt.dc = dc;
+    dc.onmessage = (event) => { let data; try { data = JSON.parse(event.data); } catch (error) { return; } handleRealtimeEvent(rt, data); };
+    const opened = new Promise((resolve, reject) => { dc.onopen = resolve; setTimeout(() => reject(new Error("음성 연결 시간이 초과되었습니다.")), RT_CONNECT_TIMEOUT_MS); });
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const answer = await fetch("https://api.openai.com/v1/realtime/calls", { method: "POST", headers: { Authorization: `Bearer ${session.clientSecret}`, "Content-Type": "application/sdp" }, body: offer.sdp });
+    if (!answer.ok) throw new Error(`음성 연결을 만들지 못했습니다(${answer.status}).`);
+    await pc.setRemoteDescription({ type: "answer", sdp: await answer.text() });
+    await opened;
+    pc.onconnectionstatechange = () => { if (["failed", "closed"].includes(pc.connectionState) && RT === rt) { rt.current?.reject?.(new Error("음성 연결이 끊겼습니다.")); } };
+    return rt;
+  } catch (error) {
+    try { pc.close(); } catch (closeError) { /* 무시합니다. */ }
+    throw error;
+  }
+}
+function rtRecorderStart(rt) {
+  if (!rt.stream || typeof MediaRecorder === "undefined") return;
+  try {
+    const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported?.(t)) || "";
+    const recorder = new MediaRecorder(rt.stream, type ? { mimeType: type } : undefined);
+    const chunks = [];
+    const cur = rt.current;
+    recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+    recorder.onstop = () => { if (cur && chunks.length) { cur.recording = new Blob(chunks, { type: recorder.mimeType || type || "audio/webm" }); rtCacheRecording(cur); } };
+    recorder.start();
+    rt.recorder = recorder;
+  } catch (error) { rt.recorder = null; }
+}
+function rtRecorderStop(rt) { try { if (rt.recorder?.state === "recording") rt.recorder.stop(); } catch (error) { /* 무시합니다. */ } rt.recorder = null; }
+// 녹음과 자막이 모두 끝나면 다시 듣기용으로 보관합니다(다시 들을 때 API를 부르지 않습니다).
+function rtCacheRecording(cur) {
+  if (!cur.recording || !cur.transcriptDone || cur.index === null || cur.cached) return;
+  cur.cached = true;
+  audioCache.set(audioKey(cur.index, cur.text.trim()), [URL.createObjectURL(cur.recording)]);
+}
+function rtMaybeFinish(rt, cur) {
+  if (!cur || cur.settled || !cur.transcriptDone || !cur.audioDone) return;
+  cur.settled = true;
+  clearTimeout(cur.timer); clearTimeout(cur.audioTimer);
+  if (rt.current === cur) rt.current = null;
+  rtCacheRecording(cur);
+  cur.resolve({ text: cur.text.trim() });
+}
+function handleRealtimeEvent(rt, event) {
+  const cur = rt.current;
+  // 끊은 이전 응답의 늦은 신호가 새 응답에 섞이지 않도록 응답 ID로 거릅니다.
+  const responseId = event.response_id || event.response?.id || null;
+  if (cur && event.type === "response.created" && !cur.responseId) { cur.responseId = responseId; return; }
+  if (cur && responseId && cur.responseId && responseId !== cur.responseId) return;
+  switch (event.type) {
+    case "response.output_audio_transcript.delta":
+      if (!cur) return;
+      cur.text += event.delta || "";
+      clearTimeout(cur.timer);
+      cur.onText?.(cur.text);
+      return;
+    case "response.output_audio_transcript.done":
+      if (!cur) return;
+      if (event.transcript) cur.text = event.transcript;
+      cur.transcriptDone = true;
+      cur.onText?.(cur.text);
+      cur.onTranscriptDone?.(cur.text.trim());
+      // 재생 종료 신호가 오지 않는 경우를 대비한 안전장치(대략 글자 수 × 0.2초 + 4초).
+      cur.audioTimer = setTimeout(() => { cur.audioDone = true; rtRecorderStop(rt); rtMaybeFinish(rt, cur); }, cur.text.length * 200 + 4000);
+      rtMaybeFinish(rt, cur);
+      return;
+    case "output_audio_buffer.started":
+      if (!cur) return;
+      cur.audioStarted = true;
+      cur.onAudioStart?.();
+      rtRecorderStart(rt);
+      return;
+    case "output_audio_buffer.stopped":
+    case "output_audio_buffer.cleared":
+      if (!cur || !cur.audioStarted) return;
+      cur.audioDone = true;
+      rtRecorderStop(rt);
+      rtMaybeFinish(rt, cur);
+      return;
+    case "response.done":
+      if (!cur) return;
+      if (event.response?.status === "failed") { cur.reject(new Error(event.response?.status_details?.error?.message || "학부모 응답을 만들지 못했습니다.")); return; }
+      // 소리가 아예 없었다면 재생 종료를 기다리지 않습니다.
+      if (!cur.audioStarted) setTimeout(() => { if (!cur.audioStarted) { cur.audioDone = true; rtMaybeFinish(rt, cur); } }, 1500);
+      return;
+    case "error":
+      if (cur && !cur.settled) cur.reject(new Error(event.error?.message || "음성 연결에 문제가 발생했습니다."));
+      return;
+    default:
+  }
+}
+// 학부모에게 말을 시킵니다. teacherText가 있으면 먼저 대화에 넣습니다. 자막이 끝나고 소리가 다 나오면 끝납니다.
+function rtRespond(rt, { teacherText, extra, index, onText, onAudioStart, onTranscriptDone }) {
+  return new Promise((resolve, reject) => {
+    const previous = rt.current;
+    if (previous && !previous.settled) { rtInterrupt(rt); const stop = new Error("interrupted"); stop.interrupted = true; previous.reject(stop); }
+    const cur = { text: "", index, onText, onAudioStart, onTranscriptDone, transcriptDone: false, audioDone: false, audioStarted: false, settled: false, cached: false, recording: null };
+    cur.resolve = (value) => { cur.settled = true; resolve(value); };
+    cur.reject = (error) => { if (cur.settled) return; cur.settled = true; clearTimeout(cur.timer); clearTimeout(cur.audioTimer); if (rt.current === cur) rt.current = null; reject(error); };
+    rt.current = cur;
+    cur.timer = setTimeout(() => cur.reject(new Error("학부모 응답이 늦어지고 있습니다.")), RT_FIRST_WORD_TIMEOUT_MS);
+    try {
+      if (teacherText) rtSend(rt, { type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: teacherText }] } });
+      rtSend(rt, { type: "response.create", response: { output_modalities: ["audio"], instructions: `${rt.instructions}\n\n${extra}` } });
+    } catch (error) { cur.reject(error); }
+  });
+}
+// 재생 중인 학부모 음성을 멈춥니다(정지 버튼·새 발화·재도전).
+function rtInterrupt(rt) {
+  if (!rt) return;
+  try { rtSend(rt, { type: "response.cancel" }); } catch (error) { /* 무시합니다. */ }
+  try { rtSend(rt, { type: "output_audio_buffer.clear" }); } catch (error) { /* 무시합니다. */ }
+}
+function rtTurnInstructions(initial) {
+  if (initial) return `[이번 응답]
+지금 교사에게 전화를 걸어 첫 마디를 꺼냅니다. 짧게 인사하고 "금쪽이 ${caller().self}입니다"라고 소개한 뒤, 상황에서 지금 가장 문제 삼고 싶은 구체적 사실 하나로 바로 용건을 꺼냅니다. 2~3문장, ${parent().label}의 감정과 말투가 첫 문장부터 드러나야 합니다.`;
+  return `[이번 응답]
+- 지금까지 교사 발화 ${teacherTurns()}회. 아직 해결되지 않은 학부모의 요구: ${S.openIssues.length ? S.openIssues.join(" / ") : "없음"}.
+- 방금 교사가 한 말의 구체적 내용에 ${parent().label}로서 직접 답합니다. 같은 목소리와 ${parent().label}의 말투·감정을 그대로 유지합니다.
+- 2~4문장. 교사가 요구를 충분히 풀어 주었다면 수긍하고, 모두 해결됐다면 자연스럽게 통화를 마무리합니다.`;
+}
+// Realtime으로 학부모 한 마디를 받습니다. receiveParentLine과 같은 모양({ data, index, speech })을 돌려줍니다.
+async function receiveParentLineRealtime(initial, run, teacherText) {
+  const gen = voiceGen;
+  let index = null;
+  let resolveText, rejectText;
+  const textDone = new Promise((resolve, reject) => { resolveText = resolve; rejectText = reject; });
+  const ensureBubble = (text) => {
+    if (index !== null) { S.msgs[index].content = text; return; }
+    index = S.msgs.length;
+    S.msgs.push({ role: "parent", content: text, tone: "steady", streaming: true });
+  };
+  const speech = rtRespond(RT, {
+    teacherText: initial ? "" : teacherText,
+    extra: rtTurnInstructions(initial),
+    index: null,
+    onText: (text) => { if (run !== simRun || !text) return; ensureBubble(text); RT && RT.current && (RT.current.index = index); scheduleLiveRender(); },
+    onAudioStart: () => { if (run !== simRun) return; stopRecording(false); if (gen === voiceGen) { S.speaking = true; S.playingIndex = index; paintVoiceState(); scheduleLiveRender(); } },
+    onTranscriptDone: (text) => resolveText(text)
+  }).then(() => { if (run === simRun && gen === voiceGen) { S.speaking = false; S.playingIndex = null; paintVoiceState(); syncSim(); } });
+  speech.catch((error) => rejectText(error));
+  let text;
+  try { text = await textDone; }
+  catch (error) {
+    if (error.interrupted && index !== null && run === simRun) {
+      // 교사가 말을 끊었습니다. 그때까지 한 말만 남깁니다.
+      const said = S.msgs[index].content;
+      S.msgs[index] = { role: "parent", content: said, tone: "steady" };
+      return { data: { text: said, tone: "steady", ended: false, metCriteria: [], openIssues: S.openIssues, realtime: true, interrupted: true }, index, speech: null };
+    }
+    error.partialIndex = index; throw error;
+  }
+  if (run !== simRun) return { data: { text }, index, speech };
+  if (index === null) ensureBubble(text);
+  S.msgs[index] = { role: "parent", content: text, tone: "steady" };
+  return { data: { text, tone: "steady", ended: false, metCriteria: [], openIssues: S.openIssues, realtime: true }, index, speech: speech.catch(() => {}) };
+}
+// 음성이 나간 뒤 그 턴의 판정(미해결 요구·종료)을 따로 받아 반영합니다(음성을 늦추지 않음).
+async function applyTurnMeta(run) {
+  try {
+    const meta = await apiFetchJson("/api/turn-meta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: S.sessionId, system: systemPrompt(), messages: S.apiMsgs, teacherTurns: teacherTurns(), openIssues: S.openIssues, parentType: parent().label, situation: S.situation }) }, 1);
+    if (run !== simRun) return;
+    S.openIssues = Array.isArray(meta.openIssues) ? meta.openIssues : S.openIssues;
+    if (Array.isArray(meta.metCriteria) && meta.metCriteria.length) S.feedback = meta.metCriteria;
+    if (meta.ended && !S.ended) { S.ended = true; S.msgs.push({ role: "system", content: "대화가 마무리되었습니다. '대화 종료 및 평가'를 눌러 결과를 확인하세요." }); }
+    syncSim();
+  } catch (error) { /* 판정은 부가 정보라 실패해도 대화는 이어집니다. */ }
+}
+// Realtime을 쓰다가 실패하면 이 대화의 나머지는 기존 방식으로 진행합니다.
+window.addEventListener("pagehide", () => closeRealtime());
+function fallBackToPipeline(error) {
+  console.warn("Realtime voice unavailable; falling back to the TTS pipeline.", error?.message);
+  closeRealtime();
+  notify("realtime-fallback", "실시간 음성 연결이 원활하지 않아 기본 음성 방식으로 이어서 진행합니다.");
+}
+// 이 대화에서 Realtime을 쓸 수 있으면 연결합니다(실패하면 기존 방식).
+async function startRealtime(run) {
+  try {
+    const rt = await connectRealtime(run);
+    if (run !== simRun) { try { rt.pc.close(); } catch (error) { /* 무시합니다. */ } return false; }
+    RT = rt;
+    return true;
+  } catch (error) {
+    if (run === simRun && error?.message !== "stale") console.warn("Realtime voice not available; using the TTS pipeline.", error?.message);
+    return false;
+  }
+}
+// 학부모 한 마디: Realtime이 연결돼 있으면 Realtime으로, 실패하면 그 자리에서 기존 방식으로 이어 갑니다.
+async function getParentLine(initial, run, teacherText) {
+  if (RT) {
+    try { return await receiveParentLineRealtime(initial, run, teacherText); }
+    catch (error) {
+      if (run !== simRun || error.interrupted) throw error; // 끊은 것은 연결 실패가 아닙니다.
+      if (error.partialIndex != null) S.msgs.splice(error.partialIndex, 1);
+      S.speaking = false; S.playingIndex = null; paintVoiceState();
+      fallBackToPipeline(error);
+    }
+  }
+  return receiveParentLine(initial, run);
+}
 async function receiveParentLine(initial, run) {
   const live = createLiveLine();
   let index = null, speech = null;
@@ -964,8 +1206,8 @@ async function receiveParentLine(initial, run) {
 }
 // 서버에 아예 닿지 못했을 때만 쓰는 대사입니다. 상황 설명문은 3인칭 서술이라 낭독하면 지문처럼 들리므로 인용하지 않습니다.
 function fallbackParentOpening() { const p = parent(); if (p.id === "pressure") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 이야기를 듣고 바로 전화드렸습니다. 이건 그냥 넘어갈 일이 아닌 것 같은데요, 지금 확인되는 게 뭔지부터 말씀해 주세요.`; if (p.id === "anxious") return `선생님, 금쪽이 ${caller().self}입니다. 어제 아이가 집에 와서 학교 이야기를 하는데 표정이 너무 안 좋아서요. 무슨 일이 있었던 건지, 아이는 지금 괜찮은 건지 여쭤보고 싶어서 연락드렸어요.`; if (p.id === "avoidant") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 이야기를 좀 들었는데요. 전에도 말씀드린 적이 있었지만 그때 별로 달라진 게 없어서, 솔직히 이번에는 어떨지 잘 모르겠습니다.`; if (p.id === "demanding") return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 들은 이야기가 있어서 연락드렸습니다. 학교에서 확인하신 내용이 무엇인지, 그리고 어떤 기준으로 처리되는지 분명하게 알려 주시면 좋겠습니다.`; return `선생님, 금쪽이 ${caller().self}입니다. 아이한테 들은 이야기가 있어서 연락드렸어요. 학교에서 확인된 내용이 있는지, 앞으로 어떻게 살펴봐 주실 수 있는지 여쭤보고 싶습니다.`; }
-async function startSimulation() { const run = ++simRun; clearAudioCache(); unlockAudio(); stopVoice(); noticeShown.clear(); S.situation = currentSituationText().trim(); S.situationContext = S.situationMode === "case" ? (caseSituationContext() || S.situation) : S.situation; S.msgs = []; S.apiMsgs = []; S.draft = ""; S.evaluation = null; S.ended = false; S.feedback = []; S.turnFeedback = null; S.feedbackLoading = false; S.openIssues = []; S.confirmExit = false; S.guides = []; S.guidesOpen = false; S.brief = ""; S.ttsProvider = ""; S.sheet = ""; S.fbSeen = null; S.forceRevealed = new Set(); feedbackSeq += 1; S.loading = true; S.screen = "simulation"; render(); if (difficulty().id !== "advanced") loadGuides(); let opening = "", openingIndex = null, speech = null; try { const got = await receiveParentLine(true, run); if (run !== simRun) return; const data = got.data; openingIndex = got.index; speech = got.speech; opening = S.msgs[openingIndex].content; S.brief = data.brief || ""; S.apiMsgs.push({ role: "assistant", content: opening }); if (data.degraded) S.msgs.push({ role: "system", content: "AI 발화 생성에 실패해 기본 대사로 시작했습니다. 상황에 맞춘 발화가 아니므로, 오른쪽 '민원 상황'을 기준으로 연습해 주세요. 반복되면 사이트 환경변수의 OPENAI_API_KEY를 확인해 주세요." }); } catch (e) { if (run !== simRun) return; if (e.partialIndex != null) S.msgs.splice(e.partialIndex, 1); stopPlayback(); S.speaking = false; speech = null; opening = fallbackParentOpening(); S.apiMsgs.push({ role: "assistant", content: opening }); openingIndex = S.msgs.length; S.msgs.push({ role: "parent", content: opening }); S.msgs.push({ role: "system", content: "일시적인 네트워크 문제로 기본 학부모 발화로 시작했습니다. 이후에도 오류가 반복되면 새로고침 후 다시 시도해 주세요." }); } finally { if (run === simRun) { S.loading = false; render(); } } if (run !== simRun) return; if (speech) await speech; else await speakParent(opening, openingIndex); }
-async function send() { const run = simRun; const text = (S.draft || $("teacherInput")?.value || "").trim(); if (!text || S.loading || S.ended) return; stopRecording(false); setDraft(""); S.msgs.push({ role: "teacher", content: text }); S.apiMsgs.push({ role: "user", content: text }); S.loading = true; render(); requestTurnFeedback(text, S.msgs.slice()); let reply = "", replyIndex = null, speech = null; try { const got = await receiveParentLine(false, run); if (run !== simRun) return; const data = got.data; replyIndex = got.index; speech = got.speech; reply = S.msgs[replyIndex].content; S.apiMsgs.push({ role: "assistant", content: reply }); S.ended = Boolean(data.ended); S.feedback = Array.isArray(data.metCriteria) ? data.metCriteria : []; S.openIssues = Array.isArray(data.openIssues) ? data.openIssues : []; } catch (e) { if (run !== simRun) return; if (e.partialIndex != null) { S.msgs.splice(e.partialIndex, 1); stopPlayback(); S.speaking = false; paintVoiceState(); } S.msgs.push({ role: "system", content: `AI 응답 오류: ${e.message}${e.fatal ? " 문제가 계속되면 /api/health 를 열어 어떤 항목이 실패하는지 확인해 주세요." : ""}` }); } finally { if (run === simRun) { S.loading = false; render(); } } if (run !== simRun) return; if (speech) await speech; else if (reply) await speakParent(reply, replyIndex); }
+async function startSimulation() { const run = ++simRun; clearAudioCache(); unlockAudio(); stopVoice(); noticeShown.clear(); S.situation = currentSituationText().trim(); S.situationContext = S.situationMode === "case" ? (caseSituationContext() || S.situation) : S.situation; S.msgs = []; S.apiMsgs = []; S.draft = ""; S.evaluation = null; S.ended = false; S.feedback = []; S.turnFeedback = null; S.feedbackLoading = false; S.openIssues = []; S.confirmExit = false; S.guides = []; S.guidesOpen = false; S.brief = ""; S.ttsProvider = ""; S.sheet = ""; S.fbSeen = null; S.forceRevealed = new Set(); feedbackSeq += 1; S.loading = true; S.screen = "simulation"; render(); if (difficulty().id !== "advanced") loadGuides(); let opening = "", openingIndex = null, speech = null; await startRealtime(run); if (run !== simRun) return; try { const got = await getParentLine(true, run); if (run !== simRun) return; const data = got.data; openingIndex = got.index; speech = got.speech; opening = S.msgs[openingIndex].content; S.brief = data.brief || ""; S.apiMsgs.push({ role: "assistant", content: opening }); if (data.degraded) S.msgs.push({ role: "system", content: "AI 발화 생성에 실패해 기본 대사로 시작했습니다. 상황에 맞춘 발화가 아니므로, 오른쪽 '민원 상황'을 기준으로 연습해 주세요. 반복되면 사이트 환경변수의 OPENAI_API_KEY를 확인해 주세요." }); } catch (e) { if (run !== simRun) return; if (e.partialIndex != null) S.msgs.splice(e.partialIndex, 1); stopPlayback(); S.speaking = false; speech = null; opening = fallbackParentOpening(); S.apiMsgs.push({ role: "assistant", content: opening }); openingIndex = S.msgs.length; S.msgs.push({ role: "parent", content: opening }); S.msgs.push({ role: "system", content: "일시적인 네트워크 문제로 기본 학부모 발화로 시작했습니다. 이후에도 오류가 반복되면 새로고침 후 다시 시도해 주세요." }); } finally { if (run === simRun) { S.loading = false; render(); } } if (run !== simRun) return; if (speech) await speech; else await speakParent(opening, openingIndex); }
+async function send() { const run = simRun; const text = (S.draft || $("teacherInput")?.value || "").trim(); if (!text || S.loading || S.ended) return; stopRecording(false); setDraft(""); S.msgs.push({ role: "teacher", content: text }); S.apiMsgs.push({ role: "user", content: text }); S.loading = true; render(); requestTurnFeedback(text, S.msgs.slice()); let reply = "", replyIndex = null, speech = null; let viaRealtime = false; try { const got = await getParentLine(false, run, text); viaRealtime = Boolean(got.data.realtime); if (run !== simRun) return; const data = got.data; replyIndex = got.index; speech = got.speech; reply = S.msgs[replyIndex].content; S.apiMsgs.push({ role: "assistant", content: reply }); S.ended = Boolean(data.ended); S.feedback = Array.isArray(data.metCriteria) ? data.metCriteria : []; S.openIssues = Array.isArray(data.openIssues) ? data.openIssues : []; if (viaRealtime) applyTurnMeta(run); } catch (e) { if (run !== simRun) return; if (e.interrupted) { if (e.partialIndex != null) S.msgs.splice(e.partialIndex, 1); return; } if (e.partialIndex != null) { S.msgs.splice(e.partialIndex, 1); stopPlayback(); S.speaking = false; paintVoiceState(); } S.msgs.push({ role: "system", content: `AI 응답 오류: ${e.message}${e.fatal ? " 문제가 계속되면 /api/health 를 열어 어떤 항목이 실패하는지 확인해 주세요." : ""}` }); } finally { if (run === simRun) { S.loading = false; render(); } } if (run !== simRun) return; if (speech) await speech; else if (reply) await speakParent(reply, replyIndex); }
 async function restart() { stopVoice(); S.sessionId = uid(); await startSimulation(); }
 // 학부모의 요구가 아직 남아 있는데 평가를 누르면, 먼저 인라인 배너로 의사를 한 번 더 묻습니다.
 // window.confirm은 카카오톡 등 인앱 브라우저에서 조용히 억제되는 경우가 있어(과거 alert()가 그랬듯)

@@ -18,7 +18,8 @@ export default async (req) => {
 
   const persona = normalizePersona(String(body?.parentId || ""));
   const gender = normalizeGender(body?.gender);
-  const tone = String(getEnv("TTS_TONE") || "on").toLowerCase() === "off" ? "steady" : normalizeTone(body?.tone);
+  // 대화 중 강도 변화는 기본으로 끕니다(같은 인물이 같은 톤으로 들리게). TTS_TONE=on이면 켭니다.
+  const tone = String(getEnv("TTS_TONE") || "off").toLowerCase() === "on" ? normalizeTone(body?.tone) : "steady";
   const provider = String(getEnv("TTS_PROVIDER") || "openai").toLowerCase() === "gemini" ? "gemini" : "openai";
 
   if (provider === "gemini") {
